@@ -1,2 +1,2 @@
 # FakeTrace
-A Toolkit for AI-Generated Image Detection and Tampering Localization
+面向AI生成的图像检测和篡改定位的平台
