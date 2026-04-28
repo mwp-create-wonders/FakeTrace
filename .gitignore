@@ -76,7 +76,53 @@ docs/_build/
 target/
 
 # Jupyter Notebook
-.ipynb_checkpoints
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# =========================
+# Jupyter checkpoints
+# =========================
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# =========================
+# AI / ML project files
+# =========================
+
+# Datasets
+data/
+dataset/
+datasets/
+raw_data/
+processed_data/
+
+# Model weights / checkpoints
+checkpoints/
+checkpoint/
+weights/
+pretrained/
+model_weights/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+
+# Training / evaluation outputs
+outputs/
+output/
+results/
+runs/
+experiments/
+exp/
+logs/
+wandb/
+mlruns/
+tensorboard/
+
+# Temporary files
+tmp/
+temp/
 
 # IPython
 profile_default/
