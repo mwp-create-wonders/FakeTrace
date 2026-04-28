@@ -1,0 +1,16 @@
+{
+  "checkpoint": "Training/pretrained/model_best.pth",
+  "device": "auto",
+  "batch_size": 1,
+  "image_size": 336,
+  "threshold": 0.5,
+  "model": {
+    "backbone_name": "dinov2_vitl14",
+    "lora_rank": 8,
+    "lora_alpha": 1.0,
+    "proj_dim": 256,
+    "proj_hidden_dim": 512,
+    "dropout": 0.0,
+    "strict": true
+  }
+}

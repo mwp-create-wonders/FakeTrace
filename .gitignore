@@ -1,0 +1,248 @@
+# ============================================================
+# Python bytecode / cache
+# ============================================================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# C extensions
+*.so
+
+# ============================================================
+# Virtual environments
+# ============================================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+conda_env/
+__pypackages__/
+
+# ============================================================
+# Environment variables / secrets
+# ============================================================
+.env
+.env.*
+.envrc
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# ============================================================
+# Jupyter / IPython
+# ============================================================
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# ============================================================
+# IDE / editor settings
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+tempCodeRunnerFile.py
+
+# ============================================================
+# System files
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Distribution / packaging
+# ============================================================
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================================================
+# PyInstaller
+# ============================================================
+*.manifest
+*.spec
+
+# ============================================================
+# Installer logs
+# ============================================================
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================
+# Test / coverage / type-checking
+# ============================================================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ============================================================
+# Documentation builds
+# ============================================================
+docs/_build/
+/site
+
+# ============================================================
+# Databases / local app state
+# ============================================================
+db.sqlite3
+db.sqlite3-journal
+instance/
+.webassets-cache
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+**/logs/
+
+# ============================================================
+# AI / ML datasets
+# ============================================================
+data/
+dataset/
+datasets/
+raw_data/
+processed_data/
+
+# 如果你确实希望上传 Training/data 里的 Python 数据加载代码，
+# 需要重新允许这些代码文件。
+!Training/data/
+!Training/data/*.py
+!Training/data/**/*.py
+
+# ============================================================
+# Model weights / checkpoints / pretrained models
+# ============================================================
+pretrained/
+**/pretrained/
+checkpoints/
+**/checkpoints/
+checkpoint/
+**/checkpoint/
+weights/
+**/weights/
+model_weights/
+**/model_weights/
+
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+*.h5
+*.pb
+*.tflite
+
+# ============================================================
+# Training / evaluation outputs
+# ============================================================
+results/
+**/results/
+outputs/
+**/outputs/
+output/
+**/output/
+runs/
+**/runs/
+experiments/
+**/experiments/
+exp/
+**/exp/
+predictions/
+**/predictions/
+eval_results/
+**/eval_results/
+
+# ============================================================
+# Experiment tracking
+# ============================================================
+wandb/
+mlruns/
+tensorboard/
+lightning_logs/
+
+# ============================================================
+# Temporary files
+# ============================================================
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ============================================================
+# Large archives / compressed files
+# ============================================================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# ============================================================
+# Frontend / Node optional
+# ============================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================================
+# Streamlit / local secrets
+# ============================================================
+.streamlit/secrets.toml
+
+# ============================================================
+# PyPI configuration
+# ============================================================
+.pypirc
+
+# ============================================================
+# Misc
+# ============================================================
+*.bak
+*.backup

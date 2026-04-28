@@ -1,0 +1,30 @@
+* text=auto
+
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+LICENSE text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.pth binary
+*.pt binary
+*.ckpt binary
+*.safetensors binary
+*.onnx binary

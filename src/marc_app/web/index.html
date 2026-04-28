@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MARC Local Detector</title>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">MARC Local Detector</p>
+          <h1>图像真实性检测</h1>
+          <p class="subtitle">批量上传图片后输出 Real / Fake 分类结果和置信度。</p>
+        </div>
+        <div class="status-card">
+          <span class="status-dot"></span>
+          <div>
+            <p class="status-label">运行状态</p>
+            <p class="status" id="status">正在加载模型状态...</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="control-panel">
+        <div class="dropzone" id="dropzone">
+          <input id="fileInput" type="file" accept="image/*" multiple>
+          <div class="drop-art">
+            <span class="drop-plus">+</span>
+          </div>
+          <div class="drop-copy">
+            <strong>拖拽或选择多张图片</strong>
+            <span>支持 JPG、PNG、WEBP、BMP。所有图片只在本机推理，不会上传到外部服务。</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="pickButton" type="button">选择图片</button>
+          <button id="runButton" type="button" disabled>开始检测</button>
+          <button id="clearButton" type="button" disabled>清空列表</button>
+        </div>
+      </section>
+
+      <section class="summary" id="summary" hidden></section>
+      <section class="results" id="results" aria-live="polite"></section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
