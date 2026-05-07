@@ -2,6 +2,10 @@ torch
 torchvision
 pillow
 numpy
+yacs
+matplotlib
+opencv-python
+timm
 fastapi
 uvicorn[standard]
 python-multipart

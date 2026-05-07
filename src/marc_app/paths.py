@@ -1,8 +1,10 @@
-from pathlib import Path
+from .core.paths import CONFIG_DIR, DEFAULT_CONFIG_PATH, MARC_DIR, PROJECT_ROOT, TRUFOR_DIR, VALID_IMAGE_EXTS
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_DIR = PROJECT_ROOT / "configs"
-DEFAULT_CONFIG_PATH = CONFIG_DIR / "default.json"
-TRAINING_DIR = PROJECT_ROOT / "Training"
-VALID_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+__all__ = [
+    "PROJECT_ROOT",
+    "CONFIG_DIR",
+    "DEFAULT_CONFIG_PATH",
+    "MARC_DIR",
+    "TRUFOR_DIR",
+    "VALID_IMAGE_EXTS",
+]

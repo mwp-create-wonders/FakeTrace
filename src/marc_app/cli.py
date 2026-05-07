@@ -10,7 +10,7 @@ from .paths import DEFAULT_CONFIG_PATH
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="MARC real/fake image detector CLI",
+        description="FakeTrace real/fake image detector CLI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     input_group = parser.add_mutually_exclusive_group(required=True)
@@ -44,7 +44,7 @@ def build_overrides(args) -> dict:
 
 
 def print_results(results, threshold):
-    print("\nMARC CLI inference")
+    print("\nFakeTrace CLI inference")
     print(f"Threshold: real_probability >= {threshold:.3f} => real")
     print("-" * 92)
     print(f"{'prediction':10s} {'real_prob':>10s} {'fake_prob':>10s}  file")

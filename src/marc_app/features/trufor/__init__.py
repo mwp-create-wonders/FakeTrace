@@ -1,0 +1,1 @@
+"""TruFor tampering localization feature."""

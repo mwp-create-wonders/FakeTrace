@@ -1,7 +1,7 @@
-# MARC Local App
+# FakeTrace CLI
 
-The project keeps `Training/` as the development and training area. Runtime
-entry points live outside it and call the model through `src/marc_app`.
+The project keeps algorithm implementations in `MARC/` and `Trufor/`.
+Runtime entry points live outside them and call the app through `src/faketrace_app`.
 
 ## CLI
 
@@ -50,13 +50,14 @@ http://127.0.0.1:7860
 ## Runtime Structure
 
 - `configs/default.json`: runtime checkpoint, device, image size, threshold, and model settings
-- `src/marc_app/inference_engine.py`: shared model loading and prediction logic
-- `src/marc_app/cli.py`: command line entry point used by `app.py`
-- `src/marc_app/web.py`: FastAPI app used by `web_app.py`
-- `Training/`: preserved training and model-development files
+- `src/faketrace_app/inference_engine.py`: shared model loading and prediction logic
+- `src/faketrace_app/cli.py`: command line entry point used by `app.py`
+- `src/faketrace_app/web.py`: FastAPI app used by `web_app.py`
+- `MARC/`: MARC detection implementation
+- `Trufor/`: TruFor localization implementation
 
 Notes:
 
-- Default checkpoint: `Training/pretrained/model_best.pth`
+- Default checkpoint: `MARC/pretrained/model_best.pth`
 - Default threshold: `real_probability >= 0.5` means `real`; otherwise `fake`
 - Use `--device auto`, `--device cpu`, or CUDA devices such as `--device cuda:0`

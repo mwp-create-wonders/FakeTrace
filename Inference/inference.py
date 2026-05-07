@@ -1,4 +1,4 @@
-from src.marc_app.cli import main
+from src.faketrace_app.cli import main
 
 
 if __name__ == "__main__":
