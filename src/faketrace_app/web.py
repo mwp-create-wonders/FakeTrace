@@ -1,1 +1,3 @@
-from src.marc_app.web import *  # noqa: F401,F403
+from .api.app import app
+
+__all__ = ["app"]

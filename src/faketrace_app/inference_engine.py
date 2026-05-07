@@ -1,1 +1,9 @@
-from src.marc_app.inference_engine import *  # noqa: F401,F403
+from .features.detector.service import MARCInferenceEngine, Prediction, collect_image_paths, import_runtime, resolve_device
+
+__all__ = [
+    "Prediction",
+    "MARCInferenceEngine",
+    "collect_image_paths",
+    "import_runtime",
+    "resolve_device",
+]

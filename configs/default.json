@@ -1,5 +1,5 @@
 {
-  "checkpoint": "MARC/pretrained/model_best.pth",
+  "checkpoint": "models/marc/pretrained/model_best.pth",
   "device": "auto",
   "batch_size": 1,
   "image_size": 336,

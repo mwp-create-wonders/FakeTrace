@@ -4,11 +4,11 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ...core.config import AppConfig
-from ...core.paths import MARC_DIR, VALID_IMAGE_EXTS
+from ...core.paths import MARC_MODEL_DIR, VALID_IMAGE_EXTS
 
 
-if str(MARC_DIR) not in sys.path:
-    sys.path.insert(0, str(MARC_DIR))
+if str(MARC_MODEL_DIR) not in sys.path:
+    sys.path.insert(0, str(MARC_MODEL_DIR))
 
 
 @dataclass

@@ -1,1 +1,19 @@
-from src.marc_app.paths import *  # noqa: F401,F403
+from .core.paths import (
+    CONFIG_DIR,
+    DEFAULT_CONFIG_PATH,
+    MARC_MODEL_DIR,
+    MODEL_HUB_DIR,
+    PROJECT_ROOT,
+    TRUFOR_MODEL_DIR,
+    VALID_IMAGE_EXTS,
+)
+
+__all__ = [
+    "PROJECT_ROOT",
+    "CONFIG_DIR",
+    "DEFAULT_CONFIG_PATH",
+    "MODEL_HUB_DIR",
+    "MARC_MODEL_DIR",
+    "TRUFOR_MODEL_DIR",
+    "VALID_IMAGE_EXTS",
+]

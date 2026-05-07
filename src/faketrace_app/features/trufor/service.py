@@ -9,11 +9,11 @@ from typing import BinaryIO
 
 import numpy as np
 
-from ...core.paths import TRUFOR_DIR
+from ...core.paths import TRUFOR_MODEL_DIR
 
 
-if str(TRUFOR_DIR) not in sys.path:
-    sys.path.insert(0, str(TRUFOR_DIR))
+if str(TRUFOR_MODEL_DIR) not in sys.path:
+    sys.path.insert(0, str(TRUFOR_MODEL_DIR))
 
 
 @contextmanager
@@ -51,7 +51,7 @@ def build_default_config() -> TruForConfig:
     return TruForConfig(
         device="auto",
         experiment="trufor_ph3",
-        model_file=(TRUFOR_DIR / "pretrained_models" / "trufor.pth.tar").resolve(),
+        model_file=(TRUFOR_MODEL_DIR / "pretrained_models" / "trufor.pth.tar").resolve(),
     )
 
 
@@ -132,8 +132,8 @@ class TruForLocalizationEngine:
 
         config = self.base_config.clone()
         config.defrost()
-        with pushd(TRUFOR_DIR):
-            config.merge_from_file(str(TRUFOR_DIR / "lib" / "config" / f"{self.config.experiment}.yaml"))
+        with pushd(TRUFOR_MODEL_DIR):
+            config.merge_from_file(str(TRUFOR_MODEL_DIR / "lib" / "config" / f"{self.config.experiment}.yaml"))
         config.merge_from_list(["TEST.MODEL_FILE", str(self.config.model_file)])
         config.freeze()
 

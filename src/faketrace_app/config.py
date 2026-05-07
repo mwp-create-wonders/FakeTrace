@@ -1,1 +1,3 @@
-from src.marc_app.config import *  # noqa: F401,F403
+from .core.config import AppConfig, ModelConfig, load_config
+
+__all__ = ["AppConfig", "ModelConfig", "load_config"]
