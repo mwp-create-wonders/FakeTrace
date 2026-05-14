@@ -246,3 +246,6 @@ pnpm-debug.log*
 # ============================================================
 *.bak
 *.backup
+
+!models/CAT-Net/lib/
+!models/CAT-Net/experiments/
