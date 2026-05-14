@@ -260,6 +260,35 @@ h1 {
   line-height: 1.7;
 }
 
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 12px 34px rgba(17, 24, 39, 0.07);
+}
+
+.model-selector label {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.model-selector select {
+  min-width: 140px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .actions {
   display: grid;
   gap: 10px;

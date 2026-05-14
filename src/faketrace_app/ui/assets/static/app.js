@@ -9,6 +9,8 @@ const summary = document.querySelector("#summary");
 const dropTitle = document.querySelector("#dropTitle");
 const dropHint = document.querySelector("#dropHint");
 const tabs = Array.from(document.querySelectorAll(".feature-tab"));
+const modelSelector = document.querySelector("#modelSelector");
+const modelSelect = document.querySelector("#modelSelect");
 
 const featureConfig = {
   detector: {
@@ -31,6 +33,12 @@ const featureConfig = {
     selectedSummary: (count) => `已选择 ${count} 张图片，确认后开始篡改区域定位。`,
     runningSummary: (count) => `正在对 ${count} 张图片进行篡改定位，请稍候。`,
   },
+};
+
+const modelNames = {
+  trufor: "TruFor",
+  catnet: "CAT-Net",
+  fassa: "Fassa",
 };
 
 let mode = "detector";
@@ -121,6 +129,7 @@ function applyModeUi() {
   dropTitle.textContent = feature.title;
   dropHint.textContent = feature.hint;
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.mode === mode));
+  modelSelector.hidden = mode !== "localizer";
   resetSelection();
 }
 
@@ -161,8 +170,14 @@ async function runCurrentFeature() {
   const formData = new FormData();
   selectedFiles.forEach((file) => formData.append("files", file));
 
+  let endpoint = feature.endpoint;
+  if (mode === "localizer") {
+    const model = modelSelect.value;
+    endpoint += `?model=${model}`;
+  }
+
   try {
-    const response = await fetch(feature.endpoint, {
+    const response = await fetch(endpoint, {
       method: "POST",
       body: formData,
     });
@@ -174,7 +189,7 @@ async function runCurrentFeature() {
     if (mode === "detector") {
       renderDetectorResults(data.results);
     } else {
-      renderLocalizerResults(data.results);
+      renderLocalizerResults(data.results, data.meta?.model);
     }
   } catch (error) {
     setMessage(error.message);
@@ -222,11 +237,11 @@ function renderDetectorResults(items) {
   });
 }
 
-function renderLocalizerResults(items) {
+function renderLocalizerResults(items, modelName = "TruFor") {
   const suspiciousAverage = items.length
     ? items.reduce((sum, item) => sum + item.suspicious_ratio, 0) / items.length
     : 0;
-  renderSummary(`定位完成，共 ${items.length} 张图片，平均可疑区域占比 ${formatPercent(suspiciousAverage)}。`);
+  renderSummary(`定位完成（${modelName}），共 ${items.length} 张图片，平均可疑区域占比 ${formatPercent(suspiciousAverage)}。`);
 
   results.innerHTML = "";
   items.forEach((item, index) => {
@@ -243,7 +258,7 @@ function renderLocalizerResults(items) {
       <div class="result-body">
         <div class="result-head">
           <p class="filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</p>
-          <span class="badge localizer">TruFor</span>
+          <span class="badge localizer">${modelName}</span>
         </div>
         <p class="verdict">整体篡改分数：${scoreText}</p>
         <div class="prob">

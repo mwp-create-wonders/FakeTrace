@@ -7,4 +7,6 @@ DEFAULT_CONFIG_PATH = CONFIG_DIR / "default.json"
 MODEL_HUB_DIR = PROJECT_ROOT / "models"
 MARC_MODEL_DIR = MODEL_HUB_DIR / "marc"
 TRUFOR_MODEL_DIR = MODEL_HUB_DIR / "trufor"
+CATNET_MODEL_DIR = MODEL_HUB_DIR / "CAT-Net"
+FASSA_MODEL_DIR = MODEL_HUB_DIR / "Fassa"
 VALID_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}

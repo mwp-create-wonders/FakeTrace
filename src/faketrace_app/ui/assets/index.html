@@ -43,10 +43,21 @@
           </div>
         </div>
 
-        <div class="actions">
-          <button id="pickButton" type="button">选择图片</button>
-          <button id="runButton" type="button" disabled>开始处理</button>
-          <button id="clearButton" type="button" disabled>清空列表</button>
+        <div class="controls-row">
+          <div class="model-selector" id="modelSelector" hidden>
+            <label for="modelSelect">选择定位模型：</label>
+            <select id="modelSelect">
+              <option value="trufor">TruFor</option>
+              <option value="catnet">CAT-Net</option>
+              <option value="fassa">Fassa</option>
+            </select>
+          </div>
+
+          <div class="actions">
+            <button id="pickButton" type="button">选择图片</button>
+            <button id="runButton" type="button" disabled>开始处理</button>
+            <button id="clearButton" type="button" disabled>清空列表</button>
+          </div>
         </div>
       </section>
 

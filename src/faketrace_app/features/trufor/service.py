@@ -42,6 +42,7 @@ class LocalizationResult:
     localization_map_url: str
     confidence_map_url: str | None
     overlay_url: str
+    saved_files: dict[str, str] | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -167,8 +168,17 @@ class TruForLocalizationEngine:
 
         return pred_map, conf_map, score
 
-    def predict_uploads(self, uploads: list[tuple[str, BinaryIO]]) -> list[LocalizationResult]:
+    def predict_uploads(
+        self, 
+        uploads: list[tuple[str, BinaryIO]],
+        save: bool = False,
+        output_dir: Path = Path("output")
+    ) -> list[LocalizationResult]:
         results: list[LocalizationResult] = []
+        
+        if save:
+            output_dir.mkdir(parents=True, exist_ok=True)
+
         for filename, file_obj in uploads:
             with self.Image.open(file_obj) as image:
                 rgb_image = image.convert("RGB")
@@ -190,6 +200,24 @@ class TruForLocalizationEngine:
                 else None
             )
 
+            saved_files = None
+            if save:
+                base_name = Path(filename).stem
+                saved_files = {}
+                
+                loc_path = output_dir / f"{base_name}_localization.png"
+                localization_img.save(loc_path)
+                saved_files["localization_map"] = str(loc_path)
+                
+                overlay_path = output_dir / f"{base_name}_overlay.png"
+                overlay_img.save(overlay_path)
+                saved_files["overlay"] = str(overlay_path)
+                
+                if confidence_img is not None:
+                    conf_path = output_dir / f"{base_name}_confidence.png"
+                    confidence_img.save(conf_path)
+                    saved_files["confidence_map"] = str(conf_path)
+
             results.append(
                 LocalizationResult(
                     filename=Path(filename).name,
@@ -199,6 +227,7 @@ class TruForLocalizationEngine:
                     localization_map_url=data_url_from_image(localization_img),
                     confidence_map_url=data_url_from_image(confidence_img) if confidence_img else None,
                     overlay_url=data_url_from_image(overlay_img),
+                    saved_files=saved_files,
                 )
             )
         return results
