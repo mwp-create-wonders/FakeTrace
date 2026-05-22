@@ -11,8 +11,12 @@ FakeTrace/
 ├─ configs/
 │  └─ default.json                # Runtime defaults
 ├─ models/
+│  ├─ CAT-Net/                    # CAT-Net localization
+│  ├─ Fassa/                      # Fassa localization
+│  ├─ effunetpp/
 │  ├─ marc/                       # MARC detector implementation and weights
-│  └─ trufor/                     # TruFor localization implementation and weights
+│  └─ trufor/                     # TruFor localization 
+implementation and weights
 ├─ src/
 │  └─ faketrace_app/
 │     ├─ api/                     # FastAPI routes and dependency wiring
@@ -35,3 +39,4 @@ FakeTrace/
 - New model or third-party capability folders should go under `models/`.
 - HTTP routes should follow `src/faketrace_app/api/routes/<feature>.py`.
 - Feature logic should follow `src/faketrace_app/features/<feature>/service.py`.
+
