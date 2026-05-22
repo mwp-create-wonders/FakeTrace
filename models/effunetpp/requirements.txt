@@ -1,0 +1,6 @@
+# python=3.12.12
+# torch=2.8.0
+# torchvision=0.23.0
+tqdm
+pandas
+scikit-learn

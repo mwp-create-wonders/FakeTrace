@@ -5,13 +5,13 @@ from typing import Literal
 from fastapi import File, HTTPException, UploadFile, Query
 
 from ..app import app
-from ..deps import get_trufor_engine, get_catnet_engine, get_fassa_engine
+from ..deps import get_trufor_engine, get_catnet_engine, get_fassa_engine, get_effunetpp_engine
 
 
 @app.post("/api/localize")
 async def localize(
     files: list[UploadFile] = File(...),
-    model: Literal["trufor", "catnet", "fassa"] = Query("trufor", description="Model to use for localization"),
+    model: Literal["trufor", "catnet", "fassa", "effunetpp"] = Query("trufor", description="Model to use for localization"),
     save: bool = Query(False, description="Whether to save results to disk"),
     output_dir: str = Query("output", description="Directory to save output files"),
 ):
@@ -53,6 +53,14 @@ async def localize(
                 "device": str(engine.device),
                 "model": "Fassa",
                 "model_file": str((engine.FASSA_MODEL_DIR / "fassa_best_model.pth").resolve()),
+            }
+        elif model == "effunetpp":
+            engine = get_effunetpp_engine()
+            results = engine.predict_uploads(uploads, save=save, output_dir=Path(output_dir))
+            meta = {
+                "device": str(engine.device),
+                "model": "EffUnetPP",
+                "model_file": str((engine.EFFUNETPP_MODEL_DIR / "effunetpp_best_model.pth").resolve()),
             }
         else:
             raise HTTPException(status_code=400, detail=f"Unknown model: {model}")

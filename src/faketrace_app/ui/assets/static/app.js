@@ -39,6 +39,7 @@ const modelNames = {
   trufor: "TruFor",
   catnet: "CAT-Net",
   fassa: "Fassa",
+  effunetpp: "EffUnetPP",
 };
 
 let mode = "detector";

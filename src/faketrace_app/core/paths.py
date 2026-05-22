@@ -9,4 +9,5 @@ MARC_MODEL_DIR = MODEL_HUB_DIR / "marc"
 TRUFOR_MODEL_DIR = MODEL_HUB_DIR / "trufor"
 CATNET_MODEL_DIR = MODEL_HUB_DIR / "CAT-Net"
 FASSA_MODEL_DIR = MODEL_HUB_DIR / "Fassa"
+EFFUNETPP_MODEL_DIR = MODEL_HUB_DIR / "effunetpp"
 VALID_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}

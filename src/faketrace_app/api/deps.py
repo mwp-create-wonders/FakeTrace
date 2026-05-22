@@ -5,6 +5,7 @@ from ..features.catnet.service import CATNetLocalizationEngine
 from ..features.detector.service import MARCInferenceEngine
 from ..features.fassa.service import FassaLocalizationEngine
 from ..features.trufor.service import TruForLocalizationEngine
+from ..features.effunetpp.service import EffunetPPLocalizationEngine
 
 
 @lru_cache(maxsize=1)
@@ -25,3 +26,8 @@ def get_catnet_engine() -> CATNetLocalizationEngine:
 @lru_cache(maxsize=1)
 def get_fassa_engine() -> FassaLocalizationEngine:
     return FassaLocalizationEngine()
+
+
+@lru_cache(maxsize=1)
+def get_effunetpp_engine() -> EffunetPPLocalizationEngine:
+    return EffunetPPLocalizationEngine()
