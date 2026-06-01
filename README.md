@@ -375,4 +375,8 @@ FakeTrace/
 项目根目录包含 [LICENSE](./LICENSE)。
 
 ## 相关算法贡献说明
-本项目参考了：https://grip-unina.github.io/TruFor，https://github.com/mjkwon2021/cat-net以及https://github.com/edocipriano/fassa这些优秀的开源项目，在此感谢！
+本项目参考了：
+https://grip-unina.github.io/TruFor
+https://github.com/mjkwon2021/cat-net
+https://github.com/edocipriano/fassa
+这些优秀的开源项目，在此感谢！
