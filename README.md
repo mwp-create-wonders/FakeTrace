@@ -378,5 +378,4 @@ FakeTrace/
 本项目参考了：
 https://grip-unina.github.io/TruFor
 https://github.com/mjkwon2021/cat-net
-https://github.com/edocipriano/fassa
 这些优秀的开源项目，在此感谢！
