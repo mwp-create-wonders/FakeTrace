@@ -374,7 +374,5 @@ FakeTrace/
 
 项目根目录包含 [LICENSE](./LICENSE)。
 
-同时请注意：
-
-- `models/` 下部分第三方模型可能带有各自独立许可证
-- 使用、分发或商用前，建议分别核对对应模型原始仓库的许可条款
+## 相关算法贡献说明
+本项目参考了：https://grip-unina.github.io/TruFor，https://github.com/mjkwon2021/cat-net以及https://github.com/edocipriano/fassa这些优秀的开源项目，在此感谢！
