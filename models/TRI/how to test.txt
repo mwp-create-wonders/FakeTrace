@@ -1,0 +1,4 @@
+python test.py     --video-dir /path/to/video     --model-dir weights/TRI/models/     --lota-model LOTA/lota_weights/Network_best.pth 
+
+"FakeTrace\models\TRI\LOTA\lota_weights\Network_best.pth"
+"FakeTrace\models\TRI\weights\xclip-base-patch16\pytorch_model.bin"
