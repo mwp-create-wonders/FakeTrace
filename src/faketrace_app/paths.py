@@ -5,6 +5,7 @@ from .core.paths import (
     MODEL_HUB_DIR,
     PROJECT_ROOT,
     TRUFOR_MODEL_DIR,
+    TRI_MODEL_DIR,
     VALID_IMAGE_EXTS,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "MODEL_HUB_DIR",
     "MARC_MODEL_DIR",
     "TRUFOR_MODEL_DIR",
+    "TRI_MODEL_DIR",
     "VALID_IMAGE_EXTS",
 ]
