@@ -1,5 +1,5 @@
 from torch import load, no_grad, argmax
-from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from torchvision.transforms import Compose, Resize, ToTensor
 from torch.nn import Sigmoid
 from PIL.Image import open, fromarray
 from os import listdir, makedirs
@@ -7,7 +7,7 @@ from os.path import join, splitext, exists, isdir
 import numpy as np
 from net import net
 
-image_dir = "testcoco"
+image_dir = "testimg"
 output_dir = join(image_dir, "mask")
 if not exists(output_dir):
     makedirs(output_dir)
@@ -28,6 +28,7 @@ with no_grad():
         original_size = image.size
         input_image = data_transforms(image).unsqueeze(0).to("cpu")
         output, label = model(input_image)
+        possibility = (1 - Sigmoid()(label).item()) * 100
         label = "Fake" if label.item() < 0 else "Real"
         output = argmax(output, dim=1)
         output = Compose([Resize((original_size[1], original_size[0]))])(
@@ -39,4 +40,6 @@ with no_grad():
         base_name, ext = splitext(image_file)
         mask_save_path = join(output_dir, f"{base_name}_mask{ext}")
         mask_image.save(mask_save_path)
-        print(f"{label}\tMask saved: {mask_save_path}")
+        print(
+            f"{label}\tFake possibility: {possibility:.2f}%\tMask saved: {mask_save_path}"
+        )

@@ -3,16 +3,15 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-class Loss(nn.Module):
+class Loss_mask(nn.Module):
     def __init__(self):
-        super(Loss, self).__init__()
+        super().__init__()
         self.ignore_label = -1
         self.smooth = 0
         self.exponent = 2
         weight = torch.tensor([0.5, 2.5])
         self.cross_entropy = nn.CrossEntropyLoss(weight=weight, ignore_index=-1)
         self.dice = 0
-        self.acc = 0
 
     def binary_dice_loss(self, pred, target, valid_mask):
         pred = pred.reshape(pred.shape[0], -1)
@@ -24,14 +23,12 @@ class Loss(nn.Module):
             + target.pow(self.exponent) * valid_mask,
             dim=1,
         ) + max(self.smooth, 1e-5)
-
         dice = num / den
         dice = torch.mean(dice)
         return 1 - dice
 
-    def forward(self, score, pred_label, target, labels):
+    def forward(self, score, target):
         target = target.squeeze(1).long()
-        labels = labels.unsqueeze(1).float()
         CE_loss = self.cross_entropy(score, target)
         score = F.softmax(score, dim=1)
         num_classes = score.shape[1]
@@ -43,9 +40,16 @@ class Loss(nn.Module):
             score[:, 1], one_hot_target[..., 1], valid_mask
         )
         self.dice = 1 - dice_loss
-        BCE_loss = nn.BCEWithLogitsLoss()(pred_label, labels)
-        # print(pred_label, labels)
-        # print(((pred_label > 0).float() == labels).float());exit()
-        self.acc = ((pred_label > 0).float() == labels).float().mean()
+        return 0.3 * CE_loss + 0.7 * dice_loss
 
-        return 0.2 * CE_loss + 0.7 * dice_loss + 0.1 * BCE_loss
+
+class Loss_label(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.acc = 0
+
+    def forward(self, pred_label, labels):
+        labels = labels.unsqueeze(1).float()
+        self.acc = ((pred_label > 0).float() == labels).float().mean()
+        return self.bce(pred_label, labels)
