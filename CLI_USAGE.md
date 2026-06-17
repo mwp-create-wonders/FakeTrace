@@ -4,6 +4,8 @@ Runtime entry points live in `app.py` and `web_app.py`. The app code is in `src/
 
 ## CLI
 
+### Image detection
+
 ```bash
 python app.py --image path/to/image.jpg
 ```
@@ -25,6 +27,79 @@ Save machine-readable output:
 ```bash
 python app.py --image-dir path/to/images --save-json results.json --save-csv results.csv
 ```
+
+### Audio experiments
+
+ATADD-style audio training, evaluation, and batch export live behind `audio_app.py`.
+
+Check that the config, manifest, audio decoding, resampling, and padding/cropping path works:
+
+```bash
+python audio_app.py audio-healthcheck ^
+  --config configs/audio/ast_audioset_ft.yaml ^
+  --manifest data/manifests/val.csv ^
+  --output-dir output/audio_healthcheck
+```
+
+Train from CSV manifests:
+
+```bash
+python audio_app.py audio-train ^
+  --config configs/audio/ast_audioset_ft.yaml ^
+  --train-manifest data/manifests/train.csv ^
+  --val-manifest data/manifests/val.csv ^
+  --output-dir output/audio_ast ^
+  --device cuda
+```
+
+Evaluate a checkpoint:
+
+```bash
+python audio_app.py audio-eval ^
+  --config configs/audio/ast_audioset_ft.yaml ^
+  --checkpoint output/audio_ast/best.pt ^
+  --manifest data/manifests/val.csv ^
+  --output-dir output/audio_ast_eval ^
+  --device cuda
+```
+
+Export `predict.csv`, optional probabilities, and `submission.zip`:
+
+```bash
+python audio_app.py audio-predict ^
+  --config configs/audio/ast_audioset_ft.yaml ^
+  --checkpoint output/audio_ast/best.pt ^
+  --audio-dir data/eval_audio ^
+  --output-dir output/audio_submission ^
+  --fake-threshold 0.5 ^
+  --save-probs
+```
+
+Scan fake-probability thresholds on a labeled manifest:
+
+```bash
+python audio_app.py audio-threshold-scan ^
+  --config configs/audio/ast_audioset_ft.yaml ^
+  --checkpoint output/audio_ast/best.pt ^
+  --manifest data/manifests/val.csv ^
+  --output-dir output/audio_thresholds ^
+  --metric track2_macro_f1
+```
+
+Use the best threshold from a scan summary:
+
+```bash
+python audio_app.py audio-predict ^
+  --config configs/audio/ast_audioset_ft.yaml ^
+  --checkpoint output/audio_ast/best.pt ^
+  --audio-dir data/eval_audio ^
+  --output-dir output/audio_submission ^
+  --threshold-summary output/audio_thresholds/threshold_scan_summary.json ^
+  --save-probs
+```
+
+Manifest CSV files should contain at least `audio_path,label` for training and evaluation.
+Optional columns `type` and `source_name` enable per-type metrics such as `track2_macro_f1`.
 
 Install dependencies first:
 
@@ -52,6 +127,7 @@ http://127.0.0.1:7860
 - `src/faketrace_app/inference_engine.py`: shared model loading and prediction logic
 - `src/faketrace_app/cli.py`: command line entry point used by `app.py`
 - `src/faketrace_app/web.py`: FastAPI app used by `web_app.py`
+- `src/faketrace_app/audio_cli.py`: audio experiment command line entry point used by `audio_app.py`
 - `models/marc/`: MARC detection implementation
 - `models/trufor/`: TruFor localization implementation
 

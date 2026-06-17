@@ -1,0 +1,33 @@
+model:
+  name: clap_audio_head
+  pretrained_name: laion/clap-htsat-fused
+  feature_extractor_name: laion/clap-htsat-fused
+  kind: clap
+  freeze_backbone: true
+  dropout: 0.15
+  pooling: mean
+  asp_bottleneck_size: 128
+
+data:
+  sample_rate: 48000
+  max_seconds: 10.0
+  num_classes: 2
+  audio_column: audio_path
+  label_column: label
+
+train:
+  epochs: 10
+  batch_size: 32
+  lr: 0.0003
+  weight_decay: 0.01
+  grad_clip: 1.0
+  main_metric: track2_macro_f1
+  early_stop_patience: 4
+  num_workers: 4
+
+augment:
+  enable: false
+  noise_prob: 0.5
+  noise_scale: 0.003
+  gain_prob: 0.5
+  gain_db: 6.0

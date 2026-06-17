@@ -11,4 +11,6 @@ CATNET_MODEL_DIR = MODEL_HUB_DIR / "CAT-Net"
 FASSA_MODEL_DIR = MODEL_HUB_DIR / "Fassa"
 EFFUNETPP_MODEL_DIR = MODEL_HUB_DIR / "effunetpp"
 TRI_MODEL_DIR = MODEL_HUB_DIR / "TRI"
+AUDIO_MODEL_DIR = MODEL_HUB_DIR / "audio"
 VALID_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+VALID_AUDIO_EXTS = {".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac"}

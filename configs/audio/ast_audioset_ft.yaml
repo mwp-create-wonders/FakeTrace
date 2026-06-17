@@ -1,0 +1,33 @@
+model:
+  name: ast_audioset_ft
+  pretrained_name: MIT/ast-finetuned-audioset-10-10-0.4593
+  feature_extractor_name: MIT/ast-finetuned-audioset-10-10-0.4593
+  kind: spectrogram
+  freeze_backbone: false
+  dropout: 0.1
+  pooling: mean
+  asp_bottleneck_size: 128
+
+data:
+  sample_rate: 16000
+  max_seconds: 5.0
+  num_classes: 2
+  audio_column: audio_path
+  label_column: label
+
+train:
+  epochs: 5
+  batch_size: 4
+  lr: 0.00002
+  weight_decay: 0.01
+  grad_clip: 1.0
+  main_metric: accuracy
+  early_stop_patience: 10
+  num_workers: 2
+
+augment:
+  enable: false
+  noise_prob: 0.5
+  noise_scale: 0.003
+  gain_prob: 0.5
+  gain_db: 6.0

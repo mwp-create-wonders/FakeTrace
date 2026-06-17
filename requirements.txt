@@ -1,7 +1,11 @@
 torch
 torchvision
+torchaudio
+soundfile
+transformers
 pillow
 numpy
+PyYAML
 yacs
 matplotlib
 opencv-python

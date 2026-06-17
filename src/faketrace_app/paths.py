@@ -1,11 +1,13 @@
 from .core.paths import (
     CONFIG_DIR,
     DEFAULT_CONFIG_PATH,
+    AUDIO_MODEL_DIR,
     MARC_MODEL_DIR,
     MODEL_HUB_DIR,
     PROJECT_ROOT,
     TRUFOR_MODEL_DIR,
     TRI_MODEL_DIR,
+    VALID_AUDIO_EXTS,
     VALID_IMAGE_EXTS,
 )
 
@@ -14,8 +16,10 @@ __all__ = [
     "CONFIG_DIR",
     "DEFAULT_CONFIG_PATH",
     "MODEL_HUB_DIR",
+    "AUDIO_MODEL_DIR",
     "MARC_MODEL_DIR",
     "TRUFOR_MODEL_DIR",
     "TRI_MODEL_DIR",
+    "VALID_AUDIO_EXTS",
     "VALID_IMAGE_EXTS",
 ]

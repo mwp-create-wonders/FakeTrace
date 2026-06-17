@@ -1,5 +1,5 @@
 from ..app import app
-from ..deps import get_detector_engine, get_trufor_engine
+from ..deps import get_audio_engine, get_detector_engine, get_trufor_engine
 
 
 @app.get("/api/status")
@@ -18,6 +18,22 @@ def status():
     except Exception as exc:
         detector_status = {"ready": False, "detail": str(exc)}
 
+    audio_status = {"ready": False}
+    try:
+        audio = get_audio_engine()
+        audio_status = {
+            "ready": True,
+            "device": str(audio.device),
+            "checkpoint": str(audio.config.checkpoint),
+            "threshold": audio.config.threshold,
+            "model": audio.config.model.name,
+            "sample_rate": audio.config.sample_rate,
+            "max_seconds": audio.config.max_seconds,
+            "batch_size": audio.config.batch_size,
+        }
+    except Exception as exc:
+        audio_status = {"ready": False, "detail": str(exc)}
+
     trufor_status = {"ready": False}
     try:
         trufor = get_trufor_engine()
@@ -31,7 +47,8 @@ def status():
         trufor_status = {"ready": False, "detail": str(exc)}
 
     return {
-        "ready": detector_status["ready"] or trufor_status["ready"],
+        "ready": detector_status["ready"] or audio_status["ready"] or trufor_status["ready"],
         "detector": detector_status,
+        "audio": audio_status,
         "trufor": trufor_status,
     }

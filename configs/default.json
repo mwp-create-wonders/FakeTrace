@@ -12,5 +12,23 @@
     "proj_hidden_dim": 512,
     "dropout": 0.0,
     "strict": true
+  },
+  "audio": {
+    "checkpoint": "models/audio/best.pt",
+    "device": "auto",
+    "batch_size": 1,
+    "sample_rate": 16000,
+    "max_seconds": 5.0,
+    "threshold": 0.5,
+    "model": {
+      "name": "ast_audioset_ft",
+      "pretrained_name": "MIT/ast-finetuned-audioset-10-10-0.4593",
+      "feature_extractor_name": "MIT/ast-finetuned-audioset-10-10-0.4593",
+      "kind": "spectrogram",
+      "freeze_backbone": false,
+      "dropout": 0.1,
+      "pooling": "mean",
+      "asp_bottleneck_size": 128
+    }
   }
 }

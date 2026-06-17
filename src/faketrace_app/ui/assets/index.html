@@ -11,17 +11,17 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">FakeTrace Workbench</p>
-          <h1>本地图片取证工作台</h1>
+          <h1>本地多模态取证工作台</h1>
           <p class="subtitle">
-            现在这个网页已经同时支持两类能力：MARC 负责图片真伪检测，TruFor 负责篡改区域定位。
-            后续你继续加别的功能，也可以沿着这个模块化结构继续扩展。
+            现在这个网页已经同时支持三类能力：MARC 负责图片真伪检测，TruFor 负责篡改区域定位，
+            ATADD 负责音频真伪检测。后续继续加别的功能，也可以沿着这个模块化结构扩展。
           </p>
         </div>
         <div class="status-card">
           <span class="status-dot"></span>
           <div>
             <p class="status-label">运行状态</p>
-            <p class="status" id="status">正在检查 MARC 与 TruFor 模型状态...</p>
+            <p class="status" id="status">正在检查 MARC、TruFor 与 ATADD 模型状态...</p>
           </div>
         </div>
       </section>
@@ -29,6 +29,7 @@
       <section class="feature-tabs" aria-label="功能切换">
         <button class="feature-tab active" id="tab-detector" type="button" data-mode="detector">真伪检测</button>
         <button class="feature-tab" id="tab-localizer" type="button" data-mode="localizer">篡改定位</button>
+        <button class="feature-tab" id="tab-audio" type="button" data-mode="audio">音频检测</button>
       </section>
 
       <section class="control-panel">
@@ -39,13 +40,13 @@
           </div>
           <div class="drop-copy">
             <strong id="dropTitle">拖拽图片到这里，或点击选择文件</strong>
-            <span id="dropHint">真伪检测支持一次上传多张图片；篡改定位会逐张返回热力图、叠加图和可疑区域占比。</span>
+            <span id="dropHint">真伪检测支持一次上传多张图片，返回 Real / Fake 判断与概率分布。</span>
           </div>
         </div>
 
         <div class="controls-row">
           <div class="model-selector" id="modelSelector" hidden>
-            <label for="modelSelect">选择定位模型：</label>
+            <label for="modelSelect" id="modelSelectLabel">选择模型：</label>
             <select id="modelSelect">
               <option value="trufor">TruFor</option>
               <option value="catnet">CAT-Net</option>
@@ -56,7 +57,7 @@
 
           <div class="actions">
             <button id="pickButton" type="button">选择图片</button>
-            <button id="runButton" type="button" disabled>开始处理</button>
+            <button id="runButton" type="button" disabled>开始检测</button>
             <button id="clearButton" type="button" disabled>清空列表</button>
           </div>
         </div>
