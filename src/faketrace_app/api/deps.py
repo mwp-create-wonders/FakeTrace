@@ -43,3 +43,45 @@ def get_effunetpp_engine():
     from ..features.effunetpp.service import EffunetPPLocalizationEngine
 
     return EffunetPPLocalizationEngine()
+
+
+@lru_cache(maxsize=1)
+def get_forensic_moe_engine():
+    from ..features.detector.multi_service import ForensicMoEDetector
+
+    return ForensicMoEDetector(device=load_config().device)
+
+
+@lru_cache(maxsize=1)
+def get_forgelens_engine():
+    from ..features.detector.multi_service import ForgeLensDetector
+
+    return ForgeLensDetector(device=load_config().device)
+
+
+@lru_cache(maxsize=1)
+def get_lota_engine():
+    from ..features.detector.multi_service import LOTADetector
+
+    return LOTADetector(device=load_config().device)
+
+
+@lru_cache(maxsize=1)
+def get_mf2da_engine():
+    from ..features.detector.multi_service import MF2DADetector
+
+    return MF2DADetector(device=load_config().device)
+
+
+@lru_cache(maxsize=1)
+def get_univfd_engine():
+    from ..features.detector.multi_service import UnivFDDetector
+
+    return UnivFDDetector(device=load_config().device)
+
+
+@lru_cache(maxsize=1)
+def get_tri_engine():
+    from ..features.TRI.service import TRIDetectionEngine
+
+    return TRIDetectionEngine(device=load_config().device)

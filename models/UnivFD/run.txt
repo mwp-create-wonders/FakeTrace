@@ -1,0 +1,12 @@
+python train.py \
+  --real_dirs_train /workspace/user-data/datasets/DDAtraining/NIPS/0_real,/workspace/user-data/datasets/DDAtraining/NIPS/camera_post/0_real \
+  --fake_dirs_train /workspace/user-data/datasets/DDAtraining/NIPS/1_ar_fake,/workspace/user-data/datasets/DDAtraining/NIPS/1_vae_fake,/workspace/user-data/datasets/DDAtraining/NIPS/camera_post/1_ar_fake,/workspace/user-data/datasets/DDAtraining/NIPS/camera_post/1_vae_fak \
+  --real_dirs_val /workspace/user-data/datasets/ARForensics/ARForensics/val/0_real \
+  --fake_dirs_val /workspace/user-data/datasets/ARForensics/ARForensics/val/1_fake \
+  --real_num_per_dir_train 5000,5000 \
+  --fake_num_per_dir_train 2500,2500,2500,2500 \
+  --real_num_per_dir_val 2000 \
+  --fake_num_per_dir_val 2000 \
+  --batch_size 128 \
+  --name nips_compare \
+  --fix_backbone

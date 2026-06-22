@@ -122,7 +122,10 @@ pip install -r requirements.txt
 - `models/effunetpp/effunetpp_best_model.pth`
 
 如果缺少对应权重，相关功能将无法正常加载。
+
 模型权重链接： https://pan.baidu.com/s/1DD6ILIBk3Tq0ZjSzb8sQoQ?pwd=0123 提取码: 0123
+
+如有问题，请直接邮件联系: wpmu@sjtu.edu.cn
 
 ### 3. 启动 Web 应用
 
