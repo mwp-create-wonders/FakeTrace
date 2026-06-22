@@ -1,7 +1,7 @@
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, List, Tuple, Union
 
 from ...core.config import AppConfig
 from ...core.paths import MARC_MODEL_DIR, VALID_IMAGE_EXTS
@@ -51,8 +51,8 @@ def resolve_device(torch, device_name: str):
     return torch.device(device_name)
 
 
-def collect_image_paths(paths: list[str | Path], recursive: bool = False) -> list[Path]:
-    image_paths: list[Path] = []
+def collect_image_paths(paths: List[Union[str, Path]], recursive: bool = False) -> List[Path]:
+    image_paths: List[Path] = []
     for raw_path in paths:
         path = Path(raw_path).expanduser().resolve()
         if path.is_dir():
@@ -118,8 +118,8 @@ class MARCInferenceEngine:
         model.eval()
         return model
 
-    def predict_paths(self, paths: list[Path]) -> list[Prediction]:
-        results: list[Prediction] = []
+    def predict_paths(self, paths: List[Path]) -> List[Prediction]:
+        results: List[Prediction] = []
         batch_size = max(1, self.config.batch_size)
         for start in range(0, len(paths), batch_size):
             batch_paths = paths[start : start + batch_size]
@@ -130,8 +130,8 @@ class MARCInferenceEngine:
             results.extend(self._predict_batch(images, batch_paths))
         return results
 
-    def predict_uploads(self, uploads: list[tuple[str, BinaryIO]]) -> list[Prediction]:
-        results: list[Prediction] = []
+    def predict_uploads(self, uploads: List[Tuple[str, BinaryIO]]) -> List[Prediction]:
+        results: List[Prediction] = []
         batch_size = max(1, self.config.batch_size)
         for start in range(0, len(uploads), batch_size):
             batch = uploads[start : start + batch_size]
@@ -144,7 +144,7 @@ class MARCInferenceEngine:
             results.extend(self._predict_batch(images, labels))
         return results
 
-    def _predict_batch(self, images: list, labels: list[Path]) -> list[Prediction]:
+    def _predict_batch(self, images: list, labels: List[Path]) -> List[Prediction]:
         tensor = self.torch.stack(images, dim=0).to(self.device)
         with self.torch.no_grad():
             output = self.model(tensor, return_feature=False, return_tokens=False)

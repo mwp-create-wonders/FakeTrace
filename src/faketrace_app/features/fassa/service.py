@@ -3,7 +3,7 @@ import io
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import numpy as np
 import cv2
@@ -21,7 +21,7 @@ class FassaLocalizationResult:
     suspicious_ratio: float
     localization_map_url: str
     overlay_url: str
-    saved_files: dict[str, str] | None = None
+    saved_files: Optional[Dict[str, str]] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -285,8 +285,8 @@ class FassaLocalizationEngine:
         return image_tensor.unsqueeze(0), feature_tensor.unsqueeze(0), img, original_size
 
     def predict_uploads(
-        self, uploads: list[tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output")
-    ) -> list[FassaLocalizationResult]:
+        self, uploads: List[Tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output")
+    ) -> List[FassaLocalizationResult]:
         results = []
         
         if save:

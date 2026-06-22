@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional, Union
 
 from .paths import DEFAULT_CONFIG_PATH, PROJECT_ROOT
 
@@ -51,7 +51,7 @@ class AppConfig:
     audio: AudioConfig | None = None
 
 
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     merged = dict(base)
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
@@ -61,14 +61,17 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def _resolve_project_path(value: str | Path) -> Path:
+def _resolve_project_path(value: Union[str, Path]) -> Path:
     path = Path(value).expanduser()
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path.resolve()
 
 
-def load_config(config_path: str | Path | None = None, overrides: dict[str, Any] | None = None) -> AppConfig:
+def load_config(
+    config_path: Optional[Union[str, Path]] = None,
+    overrides: Optional[Dict[str, Any]] = None,
+) -> AppConfig:
     base_path = Path(config_path).expanduser().resolve() if config_path else DEFAULT_CONFIG_PATH
     with base_path.open("r", encoding="utf-8") as file:
         raw = json.load(file)

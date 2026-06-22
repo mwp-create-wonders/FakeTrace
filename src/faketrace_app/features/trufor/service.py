@@ -5,7 +5,7 @@ import sys
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -37,12 +37,12 @@ class TruForConfig:
 class LocalizationResult:
     filename: str
     path: str
-    score: float | None
+    score: Optional[float]
     suspicious_ratio: float
     localization_map_url: str
-    confidence_map_url: str | None
+    confidence_map_url: Optional[str]
     overlay_url: str
-    saved_files: dict[str, str] | None = None
+    saved_files: Optional[Dict[str, str]] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -121,7 +121,7 @@ def make_overlay_image(Image, source_image, normalized: np.ndarray):
 
 
 class TruForLocalizationEngine:
-    def __init__(self, config: TruForConfig | None = None):
+    def __init__(self, config: Optional[TruForConfig] = None):
         self.config = config or build_default_config()
         self.torch, self.Image, self.base_config, self.get_model = import_runtime()
         self.device = resolve_device(self.torch, self.config.device)
@@ -170,11 +170,11 @@ class TruForLocalizationEngine:
 
     def predict_uploads(
         self, 
-        uploads: list[tuple[str, BinaryIO]],
+        uploads: List[Tuple[str, BinaryIO]],
         save: bool = False,
         output_dir: Path = Path("output")
-    ) -> list[LocalizationResult]:
-        results: list[LocalizationResult] = []
+    ) -> List[LocalizationResult]:
+        results: List[LocalizationResult] = []
         
         if save:
             output_dir.mkdir(parents=True, exist_ok=True)

@@ -3,7 +3,7 @@ import io
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import torch
 import numpy as np
@@ -21,8 +21,8 @@ class EffunetPPLocalizationResult:
     suspicious_ratio: float
     overlay_url: str
     localization_map_url: str
-    score: float | None
-    saved_files: dict[str, str] | None = None
+    score: Optional[float]
+    saved_files: Optional[Dict[str, str]] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -169,10 +169,10 @@ class EffunetPPLocalizationEngine:
 
     def predict_uploads(
         self,
-        uploads: list[tuple[str, BinaryIO]],
+        uploads: List[Tuple[str, BinaryIO]],
         save: bool = False,
         output_dir: Path = Path("output"),
-    ) -> list[EffunetPPLocalizationResult]:
+    ) -> List[EffunetPPLocalizationResult]:
         results = []
 
         if save:

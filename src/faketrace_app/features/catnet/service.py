@@ -4,7 +4,7 @@ import io
 import base64
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -21,7 +21,7 @@ class CATNetLocalizationResult:
     suspicious_ratio: float
     localization_map_url: str
     overlay_url: str
-    saved_files: dict[str, str] | None = None
+    saved_files: Optional[Dict[str, str]] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -227,8 +227,8 @@ class CATNetLocalizationEngine:
                 os.remove(temp_jpg)
 
     def predict_uploads(
-        self, uploads: list[tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output")
-    ) -> list[CATNetLocalizationResult]:
+        self, uploads: List[Tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output")
+    ) -> List[CATNetLocalizationResult]:
         results = []
         
         if save:
