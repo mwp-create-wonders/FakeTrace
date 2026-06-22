@@ -8,4 +8,4 @@ app = FastAPI(title="FakeTrace Web App")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Import routes after app creation so each module can register its endpoints.
-from .routes import audio, detector, pages, system, trufor, video  # noqa: F401,E402
+from .routes import audio, detector, localization, pages, system, video  # noqa: F401,E402
