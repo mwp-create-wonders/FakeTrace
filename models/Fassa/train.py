@@ -94,7 +94,7 @@ class EdgeLoss(nn.Module):
         self.edge_extractor = EdgeExtractor()
     
     def forward(self, pred, target):
-        # 输入的pred是sigmoid之后的概率，pred_binary转化为二值掩码，再计算边缘，这样是否正确？
+        # 输入的pred是sigmoid之后的概率，pred_binary转化为二值掩码，再计算边缘
         # pred_binary = (pred > 0.5).float()
         pred_edge = self.edge_extractor(pred)
         target_edge = self.edge_extractor(target)
@@ -119,8 +119,7 @@ class CombinedLoss(nn.Module):
         
         dice = self.dice_loss(pred_for_loss, target)
         bce = self.bce_loss(pred_for_loss, target)
-        edge = self.edge_loss(torch.sigmoid(pred_for_loss), target) 
-        # 这里是传入了sigmoid之后的连续型概率张量，而LDB-Net中用的是pred_mask_binary = (pred_mask_sigmoid > 0.5).float()，也就是转成了0-1硬张量来处理，这是否会造成不一样的结果？
+        edge = self.edge_loss(torch.sigmoid(pred_for_loss), target)
         total = self.dice_weight * dice + self.bce_weight * bce + self.edge_weight * edge
         return total, dice.item(), bce.item(), edge.item()
 
@@ -154,8 +153,10 @@ def train():
                         help='Whether to freeze ResNet and SACC')
     parser.add_argument('--freeze_uniformer', action='store_true', default=False,
                         help='Whether to freeze UniFormer')
-    parser.add_argument('--checkpoint_dir', type=str, default='autodl-tmp/fassa_checkpoint',
+    parser.add_argument('--checkpoint_dir', type=str, default='autodl-tmp/com_ckpt',
                         help='Directory to save checkpoints')
+    parser.add_argument('--resnet_branch_pretrained', type=str, default=None,
+                        help='Path to pretrained ResNetBranch weights')
     args = parser.parse_args()
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -193,6 +194,11 @@ def train():
     
     train_dataset = torch.utils.data.Subset(full_dataset, train_indices.tolist())
     test_dataset = torch.utils.data.Subset(full_dataset, test_indices.tolist())
+
+    with open('test_images.txt', 'w') as f:
+        for idx in test_indices.tolist():
+            f.write(f"{full_dataset.file_list[idx]}\n")
+    print(f"Test images list saved to test_images.txt")
     
     train_loader = DataLoader(
         train_dataset,
@@ -220,6 +226,12 @@ def train():
         resnet_pretrained=True
     ).to(device)
     
+    if args.resnet_branch_pretrained:
+        print(f"Loading pretrained ResNetBranch weights from: {args.resnet_branch_pretrained}")
+        resnet_branch_weights = torch.load(args.resnet_branch_pretrained, map_location=device)
+        model.encoder.resnet_branch.load_state_dict(resnet_branch_weights)
+        print("Pretrained ResNetBranch weights loaded successfully!")
+    
     if args.resume:
         checkpoint = torch.load(args.resume, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -238,11 +250,19 @@ def train():
             if 'resnet_branch' not in str(param):
                 param.requires_grad = False
     
-    criterion = CombinedLoss(dice_weight=0.8, bce_weight=0.8, edge_weight=1.0)
+    criterion = CombinedLoss(dice_weight=1.0, bce_weight=1.0, edge_weight=0.0)
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+    
+    warmup_epochs = 5
+    scheduler_warmup = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=warmup_epochs)
+    scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs - warmup_epochs)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_warmup, scheduler_cosine], milestones=[warmup_epochs])
     
     print("Starting training...")
+
+    log_file = open('training_log.csv', 'w')
+    log_file.write('epoch,train_f1,train_iou,test_f1,test_iou\n')
+    
     for epoch in range(start_epoch, num_epochs):
         model.train()
         epoch_loss = 0.0
@@ -261,18 +281,10 @@ def train():
             
             optimizer.zero_grad()
             
-            outputs = model(images, features)
+            outputs, _ = model(images, features)  # 解包，忽略 anomaly_maps
             loss, dice_val, bce_val, edge_val = criterion(outputs, masks)
             
             loss.backward()
-
-            # 检查梯度
-            for name, param in model.named_parameters():
-                if param.grad is None:
-                    print(f"Warning: Gradient is None for parameter {name}")
-                    
-            exit(1)
-            
             optimizer.step()
             
             outputs_for_metric = outputs[:, 0:1, :, :] if outputs.shape[1] > 1 else outputs
@@ -323,7 +335,7 @@ def train():
                 masks = batch['mask'].to(device)
                 features = batch['feature'].to(device)
                 
-                outputs = model(images, features)
+                outputs, _ = model(images, features)  # 解包，忽略 anomaly_maps
                 
                 loss, dice_val, bce_val, edge_val = criterion(outputs, masks)
                 outputs_for_metric = outputs[:, 0:1, :, :] if outputs.shape[1] > 1 else outputs
@@ -347,6 +359,9 @@ def train():
         print(f"Epoch {epoch+1}/{num_epochs} - Test Loss: {avg_test_loss:.4f}")
         print(f"  Dice Loss: {avg_test_dice_loss:.4f}, BCE Loss: {avg_test_bce_loss:.4f}, Edge Loss: {avg_test_edge_loss:.4f}")
         print(f"  Test F1: {avg_test_f1:.4f}, Test IoU: {avg_test_iou:.4f}")
+
+        log_file.write(f'{epoch+1},{avg_f1:.4f},{avg_iou:.4f},{avg_test_f1:.4f},{avg_test_iou:.4f}\n')
+        log_file.flush()
         
         checkpoint_path = os.path.join(checkpoint_dir, f'model_epoch_{epoch+1}.pth')
         torch.save({
@@ -359,6 +374,7 @@ def train():
         }, checkpoint_path)
         print(f"Checkpoint saved: {checkpoint_path}")
     
+    log_file.close()
     print("Training completed!")
 
 

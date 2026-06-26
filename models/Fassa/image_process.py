@@ -2,239 +2,188 @@ import os
 import cv2
 import numpy as np
 import pywt
-from tqdm import tqdm  # 进度条，方便查看处理进度
+from tqdm import tqdm
+from multiprocessing import Pool, cpu_count
 
-# -------------------------- 配置参数 --------------------------
-DATASET_PATH = "autodl-tmp/data/tampered_shuffle"  # 数据集文件夹路径
-SAVE_ROOT_PATH = "autodl-tmp/data_shuffle_tensor"  # 单个npy文件保存根目录
-WAVELET = 'db1'  # 小波基选择
-TARGET_SIZE = (1024, 1024)  # 目标尺寸
-FILL_VALUE = 0  # 尺寸恢复时的填充值（0填充）
+# -------------------------- 配置 --------------------------
+DATASET_PATH = "autodl-tmp/CocoGlide/tampered"
+SAVE_ROOT_PATH = "autodl-tmp/cocov2_tensor"
+WAVELET = "db1"
+TARGET_SIZE = (1024, 1024)
+FILL_VALUE = 0
 
-# -------------------------- 核心工具函数 --------------------------
+# -------------------------- 向量化核心函数 --------------------------
+
 def binary_encoding(matrix):
-    """
-    对输入矩阵执行二进制编码（8邻域规则），返回编码矩阵（排除边界）
-    :param matrix: 输入矩阵（如512x512/256x256）
-    :return: 编码矩阵（510x510/254x254，0-255）
-    """
-    h, w = matrix.shape
-    encode_matrix = np.zeros((h-2, w-2), dtype=np.uint8)
-    # 8邻域偏移（A0-A7：上、上右、右、下右、下、下左、左、上左）
-    offsets = [(-1, 0), (-1, 1), (0, 1), (1, 1), 
-               (1, 0), (1, -1), (0, -1), (-1, -1)]
-    
-    # 遍历内部区域
-    for i in range(1, h-1):
-        for j in range(1, w-1):
-            center = matrix[i, j]
-            binary = []
-            for dx, dy in offsets:
-                neighbor = matrix[i+dx, j+dy]
-                binary.append('0' if neighbor > center else '1')
-            # 二进制转十进制
-            encode_matrix[i-1, j-1] = int(''.join(binary), 2)
-    return encode_matrix
+    center = matrix[1:-1, 1:-1]
+
+    neighbors = [
+        matrix[0:-2, 1:-1],
+        matrix[0:-2, 2:],
+        matrix[1:-1, 2:],
+        matrix[2:, 2:],
+        matrix[2:, 1:-1],
+        matrix[2:, 0:-2],
+        matrix[1:-1, 0:-2],
+        matrix[0:-2, 0:-2],
+    ]
+
+    bits = [(n <= center).astype(np.uint8) for n in neighbors]
+    bits = np.stack(bits, axis=-1)
+
+    weights = np.array([128, 64, 32, 16, 8, 4, 2, 1], dtype=np.uint8)
+    return np.sum(bits * weights, axis=-1).astype(np.uint8)
+
 
 def lbp_to_8channels(matrix):
-    """
-    将输入矩阵的8邻域LBP编码转换为8通道0/1张量（排除边界）
-    :param matrix: 输入矩阵（如512x512）
-    :return: 8通道张量（510x510x8），每个通道值为0或1
-    """
-    h, w = matrix.shape
-    # 初始化8通道输出（510x510x8）
-    lbp_channels = np.zeros((h-2, w-2, 8), dtype=np.uint8)
-    # 8邻域偏移（A0-A7：上、上右、右、下右、下、下左、左、上左）
-    offsets = [(-1, 0), (-1, 1), (0, 1), (1, 1), 
-               (1, 0), (1, -1), (0, -1), (-1, -1)]
-    
-    # 遍历内部区域
-    for i in range(1, h-1):
-        for j in range(1, w-1):
-            center = matrix[i, j]
-            # 对每个邻域方向生成0/1值
-            for idx, (dx, dy) in enumerate(offsets):
-                neighbor = matrix[i+dx, j+dy]
-                lbp_channels[i-1, j-1, idx] = 0 if neighbor > center else 1
-    return lbp_channels
+    center = matrix[1:-1, 1:-1]
+
+    neighbors = [
+        matrix[0:-2, 1:-1],
+        matrix[0:-2, 2:],
+        matrix[1:-1, 2:],
+        matrix[2:, 2:],
+        matrix[2:, 1:-1],
+        matrix[2:, 0:-2],
+        matrix[1:-1, 0:-2],
+        matrix[0:-2, 0:-2],
+    ]
+
+    channels = [(n <= center).astype(np.uint8) for n in neighbors]
+    return np.stack(channels, axis=-1)
+
 
 def restore_size(matrix, target_size, fill_value=FILL_VALUE):
-    """
-    将矩阵（如510x510/510x510x8）恢复为目标尺寸（如512x512/512x512x8）
-    方法：在矩阵四周填充一行/列指定值（默认0）
-    :param matrix: 输入小矩阵（2D或3D）
-    :param target_size: 目标尺寸 (h, w)
-    :param fill_value: 填充值
-    :return: 恢复后的矩阵
-    """
-    if len(matrix.shape) == 2:
-        # 2D矩阵（原逻辑）
+    if matrix.ndim == 2:
         h, w = matrix.shape
-        target_h, target_w = target_size
-        restored = np.full((target_h, target_w), fill_value, dtype=matrix.dtype)
-        restored[1:-1, 1:-1] = matrix
-    elif len(matrix.shape) == 3:
-        # 3D张量（新增：处理8通道情况）
+        out = np.full(target_size, fill_value, dtype=matrix.dtype)
+        out[1:-1, 1:-1] = matrix
+        return out
+
+    elif matrix.ndim == 3:
         h, w, c = matrix.shape
-        target_h, target_w = target_size
-        restored = np.full((target_h, target_w, c), fill_value, dtype=matrix.dtype)
-        restored[1:-1, 1:-1, :] = matrix
+        out = np.full((*target_size, c), fill_value, dtype=matrix.dtype)
+        out[1:-1, 1:-1, :] = matrix
+        return out
+
     else:
-        raise ValueError(f"不支持的矩阵维度：{matrix.shape}")
-    return restored
+        raise ValueError(matrix.shape)
 
-def normalize_channels(tensor):
-    """
-    对张量的所有通道执行全局Min-Max归一化（0-1）
-    :param tensor: 输入张量 (h, w, c)
-    :return: 归一化后的张量
-    """
-    min_val = np.min(tensor)
-    max_val = np.max(tensor)
-    if max_val - min_val == 0:
-        return np.zeros_like(tensor, dtype=np.float32)
-    normalized = (tensor - min_val) / (max_val - min_val)
-    return normalized.astype(np.float32)
 
-# -------------------------- 单张图像处理函数 --------------------------
+def normalize(x):
+    mn, mx = x.min(), x.max()
+    if mx - mn == 0:
+        return np.zeros_like(x, dtype=np.float32)
+    return ((x - mn) / (mx - mn)).astype(np.float32)
+
+# -------------------------- 单张图处理 --------------------------
+
 def process_single_image(img_path):
-    """
-    处理单张图像，返回最终拼接并归一化的512x512x64张量
-    新增：HVD子带的8通道LBP编码（24通道） + 原有40通道 = 64通道
-    """
-    # 1. 读取并resize到1024x1024（灰度图）
+
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        raise ValueError(f"无法读取图像：{img_path}")
-    img_resized = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_LINEAR)
-    img_float = np.float32(img_resized)
+        raise ValueError(img_path)
 
-    # -------------------------- 步骤2：一级小波处理 --------------------------
-    # 2.1 一级小波变换（得到4个子带：512x512）
-    coeffs1 = pywt.dwt2(img_float, WAVELET)
-    LL1, (LH1, HL1, HH1) = coeffs1
-    A = np.stack([LL1, LH1, HL1, HH1], axis=-1)  # 512x512x4
+    img = cv2.resize(img, TARGET_SIZE)
+    img = img.astype(np.float32)
 
-    # 2.2 对4个子带编码 + 尺寸恢复（原有逻辑）
-    B_list = []
+    # ---------- 1级小波 ----------
+    LL1, (LH1, HL1, HH1) = pywt.dwt2(img, WAVELET)
+    A = np.stack([LL1, LH1, HL1, HH1], axis=-1)
+
+    # ---------- B ----------
+    B = []
     for i in range(4):
-        subband = A[..., i]
-        encode_mat = binary_encoding(subband)  # 510x510
-        restored_mat = restore_size(encode_mat, (512, 512))  # 恢复为512x512
-        B_list.append(restored_mat)
-    B = np.stack(B_list, axis=-1).astype(np.float32)  # 512x512x4（转为浮点型方便相乘）
+        enc = binary_encoding(A[..., i])
+        B.append(restore_size(enc, (512, 512)))
+    B = np.stack(B, axis=-1).astype(np.float32)
 
-    # 2.3 A与B逐通道逐元素相乘得到C（原有逻辑）
-    C = A * B  # 512x512x4
+    C = A * B
 
-    # -------------------------- 新增步骤：HVD子带8通道LBP编码 --------------------------
-    # 提取HVD子带（LH1、HL1、HH1）
-    hvd_subbands = [LH1, HL1, HH1]
-    hvd_8ch_list = []
-    for subband in hvd_subbands:
-        # 生成8通道LBP编码（510x510x8）
-        lbp_8ch = lbp_to_8channels(subband)
-        # 恢复尺寸为512x512x8（四周补0）
-        restored_8ch = restore_size(lbp_8ch, (512, 512))
-        hvd_8ch_list.append(restored_8ch)
-    # 拼接3个子带的8通道张量 → 512x512x24
-    HVD_24ch = np.concatenate(hvd_8ch_list, axis=-1).astype(np.float32)
+    # ---------- HVD LBP ----------
+    hvd = []
+    for sub in [LH1, HL1, HH1]:
+        lbp = lbp_to_8channels(sub)
+        hvd.append(restore_size(lbp, (512, 512)))
+    HVD_24 = np.concatenate(hvd, axis=-1).astype(np.float32)
 
-    # -------------------------- 步骤3：二级小波处理（原有逻辑） --------------------------
-    # 3.1 对一级4个子带分别做小波变换（得到16个子带：256x256）
+    # ---------- 2级小波 ----------
     D_list = []
     for i in range(4):
-        subband_level1 = A[..., i]
-        coeffs2 = pywt.dwt2(subband_level1, WAVELET)
-        LL2, (LH2, HL2, HH2) = coeffs2
+        LL2, (LH2, HL2, HH2) = pywt.dwt2(A[..., i], WAVELET)
         D_list.extend([LL2, LH2, HL2, HH2])
-    D = np.stack(D_list, axis=-1)  # 256x256x16
 
-    # 3.2 对16个子带编码 + 尺寸恢复
+    D = np.stack(D_list, axis=-1)
+
+    # ---------- E ----------
     E_list = []
     for i in range(16):
-        subband = D[..., i]
-        encode_mat = binary_encoding(subband)  # 254x254
-        restored_mat = restore_size(encode_mat, (256, 256))  # 恢复为256x256
-        E_list.append(restored_mat)
-    E = np.stack(E_list, axis=-1).astype(np.float32)  # 256x256x16
+        enc = binary_encoding(D[..., i])
+        E_list.append(restore_size(enc, (256, 256)))
 
-    # 3.3 D与E逐通道逐元素相乘得到F
-    F = D * E  # 256x256x16
+    E = np.stack(E_list, axis=-1).astype(np.float32)
+    F = D * E
 
-    # -------------------------- 步骤4：上采样 + 拼接 + 归一化 --------------------------
-    # 4.1 将E和F上采样到512x512（双线性插值）
-    E_up = cv2.resize(E, (512, 512), interpolation=cv2.INTER_LINEAR)  # 512x512x16
-    F_up = cv2.resize(F, (512, 512), interpolation=cv2.INTER_LINEAR)  # 512x512x16
+    # ---------- resize ----------
+    E_up = cv2.resize(E, (512, 512))
+    F_up = cv2.resize(F, (512, 512))
 
-    # 4.2 原有拼接（BCEF：4+4+16+16=40通道）
-    original_40ch = np.concatenate([B, C, E_up, F_up], axis=-1)  # 512x512x40
+    # ---------- concat ----------
+    out = np.concatenate([B, C, E_up, F_up, HVD_24], axis=-1)
 
-    # 4.3 拼接原有40通道 + 新增24通道 → 64通道
-    concatenated = np.concatenate([original_40ch, HVD_24ch], axis=-1)  # 512x512x64
+    return normalize(out).astype(np.float16)
 
-    # 4.4 所有通道归一化（0-1）
-    normalized_tensor = normalize_channels(concatenated)
-    normalized_tensor = normalized_tensor.astype(np.float16)
+# -------------------------- worker（多进程） --------------------------
 
-    return normalized_tensor
+def init_worker(save_root):
+    global SAVE_ROOT
+    SAVE_ROOT = save_root
 
-# -------------------------- 批量处理数据集（单张保存） --------------------------
-def process_dataset_and_save_compressed(dataset_path, save_root_path):
-    os.makedirs(save_root_path, exist_ok=True)
-    
-    img_extensions = ['.jpg', '.jpeg', '.png', '.tif']
-    img_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) 
-                 if os.path.splitext(f)[1].lower() in img_extensions]
-    
-    if len(img_paths) == 0:
-        raise FileNotFoundError(f"在 {dataset_path} 中未找到任何图像文件")
-    
-    success_count = 0
-    failed_files = []
-    
-    for img_path in tqdm(img_paths, desc="处理并压缩保存图像"):
-        try:
-            tensor = process_single_image(img_path)
-            file_name = os.path.basename(img_path)
-            file_prefix = os.path.splitext(file_name)[0]
-            
-            # 核心修改：用np.savez_compressed替代np.save，启用无损压缩
-            save_path = os.path.join(save_root_path, f"{file_prefix}.npz")  # 后缀改为npz
-            np.savez_compressed(save_path, tensor=tensor)  # 以key='tensor'存储
-            
-            success_count += 1
-        except Exception as e:
-            failed_files.append((img_path, str(e)))
-            print(f"\n处理图像 {img_path} 时出错：{e}，跳过该图像")
-    
-    print(f"\n===== 处理完成 ======")
-    print(f"总计扫描到 {len(img_paths)} 张图像")
-    print(f"成功处理并保存 {success_count} 张图像")
-    print(f"处理失败 {len(failed_files)} 张图像")
-    
-    if failed_files:
-        print(f"\n失败文件列表：")
-        for file_path, error in failed_files:
-            print(f"  {file_path}: {error}")
 
-# -------------------------- 读取压缩后的npz文件（训练时用） --------------------------
-def load_compressed_tensor(npz_path):
-    """读取压缩保存的npz文件，返回原始张量"""
-    with np.load(npz_path) as data:
-        tensor = data['tensor']  # 对应保存时的key='tensor'
-    return tensor
-
-# -------------------------- 主执行 --------------------------
-if __name__ == "__main__":
+def worker(img_path):
     try:
-        process_dataset_and_save_compressed(DATASET_PATH, SAVE_ROOT_PATH)
-        print(f"\n所有压缩后的张量文件已保存到：{SAVE_ROOT_PATH}")
-        
-        # 测试读取（可选）
-        sample_npz = os.listdir(SAVE_ROOT_PATH)[0]
-        sample_tensor = load_compressed_tensor(os.path.join(SAVE_ROOT_PATH, sample_npz))
-        print(f"示例张量形状：{sample_tensor.shape}")  # 仍为(512,512,64)
+        tensor = process_single_image(img_path)
+
+        name = os.path.splitext(os.path.basename(img_path))[0]
+        save_path = os.path.join(SAVE_ROOT, name + ".npz")
+
+        np.savez_compressed(save_path, tensor=tensor)
+
+        return 1
     except Exception as e:
-        print(f"执行出错：{e}")
+        print("error:", img_path, e)
+        return 0
+
+# -------------------------- 主函数（并行） --------------------------
+
+def process_dataset():
+
+    os.makedirs(SAVE_ROOT_PATH, exist_ok=True)
+
+    img_paths = [
+        os.path.join(DATASET_PATH, f)
+        for f in os.listdir(DATASET_PATH)
+        if f.lower().endswith((".jpg", ".png", ".jpeg", ".tif"))
+    ]
+
+    workers = os.cpu_count() or 1
+    print(f"Using {workers} CPU cores")
+
+    with Pool(
+        processes=workers,
+        initializer=init_worker,
+        initargs=(SAVE_ROOT_PATH,)
+    ) as pool:
+
+        results = list(tqdm(
+            pool.imap(worker, img_paths),
+            total=len(img_paths)
+        ))
+
+    print("done:", sum(results), "/", len(results))
+
+
+# -------------------------- main --------------------------
+
+if __name__ == "__main__":
+    process_dataset()

@@ -1,7 +1,10 @@
 import base64
+import gc
 import io
 import sys
+import time
 from dataclasses import asdict, dataclass
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Tuple
 
@@ -11,8 +14,23 @@ import pywt
 
 from ...core.paths import FASSA_MODEL_DIR
 
+
+MAX_CONCURRENT_FILES = 10
+DEFAULT_BATCH_SIZE = 10
+PARALLEL_THRESHOLD = 2
+
 if str(FASSA_MODEL_DIR) not in sys.path:
     sys.path.insert(0, str(FASSA_MODEL_DIR))
+
+from image_process import (
+    binary_encoding,
+    lbp_to_8channels,
+    restore_size,
+    normalize as normalize_tensor,
+    WAVELET,
+    TARGET_SIZE,
+    FILL_VALUE,
+)
 
 
 @dataclass
@@ -114,119 +132,108 @@ def make_overlay_image(Image, source_image, normalized: np.ndarray):
     return overlay.convert("RGB")
 
 
-class FassaFeatureExtractor:
-    WAVELET = 'db1'
-    TARGET_SIZE = (1024, 1024)
-    FILL_VALUE = 0
+def extract_features_from_gray(img_gray: np.ndarray) -> np.ndarray:
+    img_resized = cv2.resize(img_gray, TARGET_SIZE, interpolation=cv2.INTER_LINEAR)
+    img_float = np.float32(img_resized)
 
-    @staticmethod
-    def binary_encoding(matrix):
-        h, w = matrix.shape
-        encode_matrix = np.zeros((h-2, w-2), dtype=np.uint8)
-        offsets = [(-1, 0), (-1, 1), (0, 1), (1, 1), 
-                   (1, 0), (1, -1), (0, -1), (-1, -1)]
+    LL1, (LH1, HL1, HH1) = pywt.dwt2(img_float, WAVELET)
+    A = np.stack([LL1, LH1, HL1, HH1], axis=-1)
+
+    B = []
+    for i in range(4):
+        enc = binary_encoding(A[..., i])
+        B.append(restore_size(enc, (512, 512)))
+    B = np.stack(B, axis=-1).astype(np.float32)
+    C = A * B
+
+    hvd = []
+    for sub in [LH1, HL1, HH1]:
+        lbp = lbp_to_8channels(sub)
+        hvd.append(restore_size(lbp, (512, 512)))
+    HVD_24 = np.concatenate(hvd, axis=-1).astype(np.float32)
+
+    D_list = []
+    for i in range(4):
+        LL2, (LH2, HL2, HH2) = pywt.dwt2(A[..., i], WAVELET)
+        D_list.extend([LL2, LH2, HL2, HH2])
+    D = np.stack(D_list, axis=-1)
+
+    E_list = []
+    for i in range(16):
+        enc = binary_encoding(D[..., i])
+        E_list.append(restore_size(enc, (256, 256)))
+    E = np.stack(E_list, axis=-1).astype(np.float32)
+    F = D * E
+
+    E_up = cv2.resize(E, (512, 512))
+    F_up = cv2.resize(F, (512, 512))
+
+    out = np.concatenate([B, C, E_up, F_up, HVD_24], axis=-1)
+    return normalize_tensor(out)
+
+
+def _extract_features_worker(args):
+    idx, img_bytes = args
+    try:
+        from PIL import Image
+        import numpy as np
         
-        for i in range(1, h-1):
-            for j in range(1, w-1):
-                center = matrix[i, j]
-                binary = []
-                for dx, dy in offsets:
-                    neighbor = matrix[i+dx, j+dy]
-                    binary.append('0' if neighbor > center else '1')
-                encode_matrix[i-1, j-1] = int(''.join(binary), 2)
-        return encode_matrix
-
-    @staticmethod
-    def lbp_to_8channels(matrix):
-        h, w = matrix.shape
-        lbp_channels = np.zeros((h-2, w-2, 8), dtype=np.uint8)
-        offsets = [(-1, 0), (-1, 1), (0, 1), (1, 1), 
-                   (1, 0), (1, -1), (0, -1), (-1, -1)]
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        original_size = img.size
         
-        for i in range(1, h-1):
-            for j in range(1, w-1):
-                center = matrix[i, j]
-                for idx, (dx, dy) in enumerate(offsets):
-                    neighbor = matrix[i+dx, j+dy]
-                    lbp_channels[i-1, j-1, idx] = 0 if neighbor > center else 1
-        return lbp_channels
+        img_512 = img.resize((512, 512), Image.BILINEAR)
+        img_array = np.array(img_512, dtype=np.float32) / 255.0
+        
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        img_normalized = (img_array - mean) / std
 
-    @staticmethod
-    def restore_size(matrix, target_size, fill_value=FILL_VALUE):
-        if len(matrix.shape) == 2:
-            h, w = matrix.shape
-            target_h, target_w = target_size
-            restored = np.full((target_h, target_w), fill_value, dtype=matrix.dtype)
-            restored[1:-1, 1:-1] = matrix
-        elif len(matrix.shape) == 3:
-            h, w, c = matrix.shape
-            target_h, target_w = target_size
-            restored = np.full((target_h, target_w, c), fill_value, dtype=matrix.dtype)
-            restored[1:-1, 1:-1, :] = matrix
-        else:
-            raise ValueError(f"不支持的矩阵维度：{matrix.shape}")
-        return restored
+        img_array_original = np.array(img, dtype=np.float32) / 255.0
+        img_gray = cv2.cvtColor(img_array_original, cv2.COLOR_RGB2GRAY)
+        features = extract_features_from_gray(img_gray)
+        
+        return idx, {
+            'features': np.ascontiguousarray(features.transpose(2, 0, 1)),
+            'img_normalized': np.ascontiguousarray(img_normalized.transpose(2, 0, 1)),
+            'rgb_image': img,
+            'original_size': original_size
+        }
+    except Exception as e:
+        print(f"Error extracting features for image {idx}: {e}")
+        return idx, None
 
-    @staticmethod
-    def normalize_channels(tensor):
-        min_val = np.min(tensor)
-        max_val = np.max(tensor)
-        if max_val - min_val == 0:
-            return np.zeros_like(tensor, dtype=np.float32)
-        normalized = (tensor - min_val) / (max_val - min_val)
-        return normalized.astype(np.float32)
 
-    @classmethod
-    def extract_features(cls, img_gray):
-        img_resized = cv2.resize(img_gray, cls.TARGET_SIZE, interpolation=cv2.INTER_LINEAR)
-        img_float = np.float32(img_resized)
+def extract_features_parallel(image_bytes_list: List[bytes]) -> List[Optional[Dict]]:
+    n = len(image_bytes_list)
+    results: List[Optional[Dict]] = [None] * n
 
-        coeffs1 = pywt.dwt2(img_float, cls.WAVELET)
-        LL1, (LH1, HL1, HH1) = coeffs1
-        A = np.stack([LL1, LH1, HL1, HH1], axis=-1)
+    num_cores = cpu_count() or 1
+    print(f"[FeatureExtraction] Total images: {n}, CPU cores: {num_cores}, PARALLEL_THRESHOLD: {PARALLEL_THRESHOLD}")
 
-        B_list = []
-        for i in range(4):
-            subband = A[..., i]
-            encode_mat = cls.binary_encoding(subband)
-            restored_mat = cls.restore_size(encode_mat, (512, 512))
-            B_list.append(restored_mat)
-        B = np.stack(B_list, axis=-1).astype(np.float32)
-        C = A * B
+    t0 = time.time()
 
-        hvd_subbands = [LH1, HL1, HH1]
-        hvd_8ch_list = []
-        for subband in hvd_subbands:
-            lbp_8ch = cls.lbp_to_8channels(subband)
-            restored_8ch = cls.restore_size(lbp_8ch, (512, 512))
-            hvd_8ch_list.append(restored_8ch)
-        HVD_24ch = np.concatenate(hvd_8ch_list, axis=-1).astype(np.float32)
+    if n < PARALLEL_THRESHOLD:
+        print(f"[FeatureExtraction] Using SERIAL mode (n={n} < threshold={PARALLEL_THRESHOLD})")
+        for i, img_bytes in enumerate(image_bytes_list):
+            idx, data = _extract_features_worker((i, img_bytes))
+            results[idx] = data
+    else:
+        num_workers = min(num_cores, n)
+        print(f"[FeatureExtraction] Using PARALLEL mode with {num_workers} workers")
+        args_list = [(i, img_bytes) for i, img_bytes in enumerate(image_bytes_list)]
 
-        D_list = []
-        for i in range(4):
-            subband_level1 = A[..., i]
-            coeffs2 = pywt.dwt2(subband_level1, cls.WAVELET)
-            LL2, (LH2, HL2, HH2) = coeffs2
-            D_list.extend([LL2, LH2, HL2, HH2])
-        D = np.stack(D_list, axis=-1)
+        t_start = time.time()
+        with Pool(processes=num_workers) as pool:
+            for idx, data in pool.imap(_extract_features_worker, args_list):
+                results[idx] = data
+        t_parallel = time.time() - t_start
+        print(f"[FeatureExtraction] Parallel extraction done in {t_parallel:.3f}s")
 
-        E_list = []
-        for i in range(16):
-            subband = D[..., i]
-            encode_mat = cls.binary_encoding(subband)
-            restored_mat = cls.restore_size(encode_mat, (256, 256))
-            E_list.append(restored_mat)
-        E = np.stack(E_list, axis=-1).astype(np.float32)
-        F = D * E
+    t_total = time.time() - t0
+    success = sum(1 for r in results if r is not None)
+    print(f"[FeatureExtraction] Total time: {t_total:.3f}s, success: {success}/{n}")
 
-        E_up = cv2.resize(E, (512, 512), interpolation=cv2.INTER_LINEAR)
-        F_up = cv2.resize(F, (512, 512), interpolation=cv2.INTER_LINEAR)
-
-        original_40ch = np.concatenate([B, C, E_up, F_up], axis=-1)
-        concatenated = np.concatenate([original_40ch, HVD_24ch], axis=-1)
-        normalized_tensor = cls.normalize_channels(concatenated)
-
-        return normalized_tensor
+    return results
 
 
 class FassaLocalizationEngine:
@@ -263,17 +270,28 @@ class FassaLocalizationEngine:
         model.load_state_dict(checkpoint['model_state_dict'])
         model = model.to(self.device)
         model.eval()
+        
+        if self.torch.cuda.is_available():
+            self.torch.backends.cuda.matmul.allow_tf32 = True
+            self.torch.backends.cudnn.allow_tf32 = True
+            self.torch.backends.cudnn.benchmark = True
+            print(f"Optimizing model for CUDA with TF32 and cudnn benchmark")
+            print(f"Model device: {next(model.parameters()).device}")
+        
         return model
 
-    def _preprocess_image(self, image_bytes: bytes):
+    def _preprocess_image(self, image_bytes: bytes, precomputed_features: Optional[np.ndarray] = None):
         img = self.Image.open(io.BytesIO(image_bytes)).convert("RGB")
         original_size = img.size
         
         img_512 = img.resize((512, 512), self.Image.BILINEAR)
         img_array = np.array(img_512, dtype=np.float32) / 255.0
         
-        img_gray = self.cv2.cvtColor(img_array, self.cv2.COLOR_RGB2GRAY)
-        features = FassaFeatureExtractor.extract_features(img_gray)
+        if precomputed_features is not None:
+            features = precomputed_features
+        else:
+            img_gray = self.cv2.cvtColor(img_array, self.cv2.COLOR_RGB2GRAY)
+            features = extract_features_from_gray(img_gray)
         
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -284,29 +302,28 @@ class FassaLocalizationEngine:
         
         return image_tensor.unsqueeze(0), feature_tensor.unsqueeze(0), img, original_size
 
-    def predict_uploads(
-        self, uploads: List[Tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output")
-    ) -> List[FassaLocalizationResult]:
-        results = []
-        
-        if save:
-            output_dir.mkdir(parents=True, exist_ok=True)
-        
-        for filename, file_obj in uploads:
-            content = file_obj.read()
-            if not content:
-                continue
-            
-            image_tensor, feature_tensor, rgb_image, original_size = self._preprocess_image(content)
+    def _process_single_result(
+        self, filename: str, content: bytes, features: Optional[np.ndarray] = None,
+        save: bool = False, output_dir: Path = Path("output")
+    ) -> Optional[FassaLocalizationResult]:
+        """旧方法：用于没有预处理的场景"""
+        image_tensor = feature_tensor = pred = localization_map = rgb_image = None
+        try:
+            t_preprocess = time.time()
+            image_tensor, feature_tensor, rgb_image, original_size = self._preprocess_image(content, features)
+            print(f"[Timing] Preprocess {filename}: {time.time() - t_preprocess:.3f}s")
             
             image_tensor = image_tensor.to(self.device)
             feature_tensor = feature_tensor.to(self.device)
             
+            t_infer = time.time()
             with self.torch.no_grad():
-                pred = self.model(image_tensor, feature_tensor)
+                model_output = self.model(image_tensor, feature_tensor)
+                pred = model_output[0] if isinstance(model_output, tuple) else model_output
                 pred = pred[:, 0:1, :, :] if pred.shape[1] > 1 else pred
                 pred = self.torch.sigmoid(pred)[0, 0]
                 pred = pred.cpu().numpy()
+            print(f"[Timing] Inference {filename}: {time.time() - t_infer:.3f}s")
             
             localization_map = normalize_map(pred)
             
@@ -332,14 +349,157 @@ class FassaLocalizationEngine:
                 overlay_img.save(overlay_path)
                 saved_files["overlay"] = str(overlay_path)
             
-            results.append(
-                FassaLocalizationResult(
-                    filename=Path(filename).name,
-                    suspicious_ratio=suspicious_ratio,
-                    localization_map_url=data_url_from_image(localization_img),
-                    overlay_url=data_url_from_image(overlay_img),
-                    saved_files=saved_files,
-                )
+            return FassaLocalizationResult(
+                filename=Path(filename).name,
+                suspicious_ratio=suspicious_ratio,
+                localization_map_url=data_url_from_image(localization_img),
+                overlay_url=data_url_from_image(overlay_img),
+                saved_files=saved_files,
             )
+        except Exception as e:
+            print(f"Error processing {filename}: {str(e)}")
+            return FassaLocalizationResult(
+                filename=Path(filename).name,
+                suspicious_ratio=0.0,
+                localization_map_url="",
+                overlay_url="",
+                saved_files=None,
+            )
+        finally:
+            del image_tensor, feature_tensor, pred, localization_map, rgb_image
+            if self.torch.cuda.is_available():
+                self.torch.cuda.empty_cache()
+            gc.collect()
+
+    def _process_single_result_fast(
+        self, filename: str, preprocessed_data: Dict, save: bool = False, output_dir: Path = Path("output")
+    ) -> Optional[FassaLocalizationResult]:
+        """新方法：直接使用预处理好的数据"""
+        image_tensor = feature_tensor = pred = localization_map = None
+        try:
+            t_tensor = time.time()
+            img_tensor = self.torch.from_numpy(preprocessed_data['img_normalized'])
+            feat_tensor = self.torch.from_numpy(preprocessed_data['features'])
+            print(f"[Timing-DEBUG] Create tensors {filename}: {time.time() - t_tensor:.3f}s")
+            
+            t_to_gpu = time.time()
+            image_tensor = img_tensor.unsqueeze(0).to(self.device)
+            feature_tensor = feat_tensor.unsqueeze(0).to(self.device)
+            print(f"[Timing-DEBUG] To GPU {filename}: {time.time() - t_to_gpu:.3f}s")
+            print(f"[Timing] Tensor conversion {filename}: {time.time() - t_tensor:.3f}s")
+            
+            t_infer = time.time()
+            with self.torch.no_grad():
+                model_output = self.model(image_tensor, feature_tensor)
+                pred = model_output[0] if isinstance(model_output, tuple) else model_output
+                pred = pred[:, 0:1, :, :] if pred.shape[1] > 1 else pred
+                pred = self.torch.sigmoid(pred)[0, 0]
+                pred = pred.cpu().numpy()
+            print(f"[Timing] Inference {filename}: {time.time() - t_infer:.3f}s")
+            
+            localization_map = normalize_map(pred)
+            
+            rgb_image = preprocessed_data['rgb_image']
+            original_size = preprocessed_data['original_size']
+            
+            pred_img = self.Image.fromarray(to_uint8(localization_map), mode="L")
+            upsampled_pred = pred_img.resize(original_size, self.Image.BILINEAR)
+            localization_map = np.array(upsampled_pred) / 255.0
+            
+            suspicious_ratio = float((localization_map >= 0.5).mean())
+            
+            localization_img = make_heatmap_image(self.Image, localization_map)
+            overlay_img = make_overlay_image(self.Image, rgb_image, localization_map)
+            
+            saved_files = None
+            if save:
+                base_name = Path(filename).stem
+                saved_files = {}
+                
+                loc_path = output_dir / f"{base_name}_localization.png"
+                localization_img.save(loc_path)
+                saved_files["localization_map"] = str(loc_path)
+                
+                overlay_path = output_dir / f"{base_name}_overlay.png"
+                overlay_img.save(overlay_path)
+                saved_files["overlay"] = str(overlay_path)
+            
+            return FassaLocalizationResult(
+                filename=Path(filename).name,
+                suspicious_ratio=suspicious_ratio,
+                localization_map_url=data_url_from_image(localization_img),
+                overlay_url=data_url_from_image(overlay_img),
+                saved_files=saved_files,
+            )
+        except Exception as e:
+            print(f"Error processing {filename}: {str(e)}")
+            return FassaLocalizationResult(
+                filename=Path(filename).name,
+                suspicious_ratio=0.0,
+                localization_map_url="",
+                overlay_url="",
+                saved_files=None,
+            )
+        finally:
+            del image_tensor, feature_tensor, pred, localization_map
+
+    def predict_uploads(
+        self, uploads: List[Tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output"),
+        batch_size: int = DEFAULT_BATCH_SIZE, max_files: int = MAX_CONCURRENT_FILES
+    ) -> List[FassaLocalizationResult]:
+        request_start_time = time.time()
+        
+        if len(uploads) > max_files:
+            print(f"Warning: Number of files ({len(uploads)}) exceeds max limit ({max_files}). Processing first {max_files} files.")
+            uploads = uploads[:max_files]
+        
+        if save:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        
+        t1 = time.time()
+        filenames = []
+        image_bytes_list = []
+        for filename, file_obj in uploads:
+            content = file_obj.read()
+            if content:
+                filenames.append(filename)
+                image_bytes_list.append(content)
+        read_time = time.time() - t1
+        print(f"[Timing] File reading: {read_time:.3f}s")
+        
+        total_files = len(filenames)
+        print(f"Extracting features for {total_files} images...")
+        
+        t2 = time.time()
+        preprocessed_list = extract_features_parallel(image_bytes_list)
+        feature_time = time.time() - t2
+        print(f"[Timing] Feature extraction + preprocessing: {feature_time:.3f}s")
+        
+        print(f"Feature extraction complete. Running model inference...")
+        
+        t3 = time.time()
+        results = []
+        for idx, (filename, preprocessed_data) in enumerate(zip(filenames, preprocessed_list)):
+            if preprocessed_data is None:
+                results.append(
+                    FassaLocalizationResult(
+                        filename=Path(filename).name,
+                        suspicious_ratio=0.0,
+                        localization_map_url="",
+                        overlay_url="",
+                        saved_files=None,
+                    )
+                )
+                continue
+            
+            result = self._process_single_result_fast(filename, preprocessed_data, save, output_dir)
+            results.append(result)
+            print(f"Processed {idx + 1}/{total_files}: {filename}")
+        
+        inference_time = time.time() - t3
+        print(f"[Timing] Model inference: {inference_time:.3f}s")
+        
+        total_time = time.time() - request_start_time
+        print(f"[Timing] TOTAL REQUEST TIME: {total_time:.3f}s (read={read_time:.3f}s, feature={feature_time:.3f}s, inference={inference_time:.3f}s)")
         
         return results
