@@ -10,6 +10,7 @@ from typing import BinaryIO, Dict, List, Optional, Tuple
 import numpy as np
 
 from ...core.paths import TRUFOR_MODEL_DIR
+from ...core.uploads import normalize_upload_filename, safe_upload_stem
 
 
 if str(TRUFOR_MODEL_DIR) not in sys.path:
@@ -180,6 +181,7 @@ class TruForLocalizationEngine:
             output_dir.mkdir(parents=True, exist_ok=True)
 
         for filename, file_obj in uploads:
+            normalized_name = normalize_upload_filename(filename)
             with self.Image.open(file_obj) as image:
                 rgb_image = image.convert("RGB")
                 rgb_array = np.array(rgb_image, dtype=np.float32) / 256.0
@@ -202,7 +204,7 @@ class TruForLocalizationEngine:
 
             saved_files = None
             if save:
-                base_name = Path(filename).stem
+                base_name = safe_upload_stem(normalized_name)
                 saved_files = {}
                 
                 loc_path = output_dir / f"{base_name}_localization.png"
@@ -220,8 +222,8 @@ class TruForLocalizationEngine:
 
             results.append(
                 LocalizationResult(
-                    filename=Path(filename).name,
-                    path=str(Path(filename)),
+                    filename=normalized_name,
+                    path=normalized_name,
                     score=score,
                     suspicious_ratio=suspicious_ratio,
                     localization_map_url=data_url_from_image(localization_img),

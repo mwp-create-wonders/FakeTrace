@@ -9,6 +9,7 @@ from typing import BinaryIO, Dict, List, Optional, Tuple
 import numpy as np
 
 from ...core.paths import CATNET_MODEL_DIR
+from ...core.uploads import normalize_upload_filename, safe_upload_stem
 
 
 if str(CATNET_MODEL_DIR) not in sys.path:
@@ -42,6 +43,17 @@ def import_runtime():
             f"Missing dependency for CAT-Net: {missing}. Install dependencies with: pip install -r requirements.txt"
         ) from exc
     return torch, F, Image, np, models, config, update_config, AbstractDataset
+
+
+def resolve_model_builder(models_module, model_name: str):
+    model_module = getattr(models_module, model_name, None)
+    if model_module is None:
+        raise ValueError(f"Unsupported CAT-Net model: {model_name}")
+
+    builder = getattr(model_module, "get_seg_model", None)
+    if builder is None:
+        raise ValueError(f"CAT-Net model builder not found for: {model_name}")
+    return builder
 
 
 def resolve_device(torch, device_name: str):
@@ -152,7 +164,8 @@ class CATNetLocalizationEngine:
         self._dct_extractor = DCTExtractor(DCT_channels=1)
 
     def _load_model(self):
-        model = eval('self.models.' + self.config.MODEL.NAME + '.get_seg_model')(self.config)
+        builder = resolve_model_builder(self.models, self.config.MODEL.NAME)
+        model = builder(self.config)
         
         if self.config.TEST.MODEL_FILE:
             model_state_file = self.config.TEST.MODEL_FILE
@@ -235,6 +248,7 @@ class CATNetLocalizationEngine:
             output_dir.mkdir(parents=True, exist_ok=True)
         
         for filename, file_obj in uploads:
+            normalized_name = normalize_upload_filename(filename)
             content = file_obj.read()
             if not content:
                 continue
@@ -263,7 +277,7 @@ class CATNetLocalizationEngine:
             
             saved_files = None
             if save:
-                base_name = Path(filename).stem
+                base_name = safe_upload_stem(normalized_name)
                 saved_files = {}
                 
                 loc_path = output_dir / f"{base_name}_localization.png"
@@ -276,7 +290,7 @@ class CATNetLocalizationEngine:
             
             results.append(
                 CATNetLocalizationResult(
-                    filename=Path(filename).name,
+                    filename=normalized_name,
                     suspicious_ratio=suspicious_ratio,
                     localization_map_url=data_url_from_image(self.Image, localization_img),
                     overlay_url=data_url_from_image(self.Image, overlay_img),

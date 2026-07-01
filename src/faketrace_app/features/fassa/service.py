@@ -13,6 +13,7 @@ import cv2
 import pywt
 
 from ...core.paths import FASSA_MODEL_DIR
+from ...core.uploads import normalize_upload_filename, safe_upload_stem
 
 
 MAX_CONCURRENT_FILES = 10
@@ -302,92 +303,22 @@ class FassaLocalizationEngine:
         
         return image_tensor.unsqueeze(0), feature_tensor.unsqueeze(0), img, original_size
 
-    def _process_single_result(
-        self, filename: str, content: bytes, features: Optional[np.ndarray] = None,
-        save: bool = False, output_dir: Path = Path("output")
-    ) -> Optional[FassaLocalizationResult]:
-        """旧方法：用于没有预处理的场景"""
-        image_tensor = feature_tensor = pred = localization_map = rgb_image = None
-        try:
-            t_preprocess = time.time()
-            image_tensor, feature_tensor, rgb_image, original_size = self._preprocess_image(content, features)
-            print(f"[Timing] Preprocess {filename}: {time.time() - t_preprocess:.3f}s")
-            
-            image_tensor = image_tensor.to(self.device)
-            feature_tensor = feature_tensor.to(self.device)
-            
-            t_infer = time.time()
-            with self.torch.no_grad():
-                model_output = self.model(image_tensor, feature_tensor)
-                pred = model_output[0] if isinstance(model_output, tuple) else model_output
-                pred = pred[:, 0:1, :, :] if pred.shape[1] > 1 else pred
-                pred = self.torch.sigmoid(pred)[0, 0]
-                pred = pred.cpu().numpy()
-            print(f"[Timing] Inference {filename}: {time.time() - t_infer:.3f}s")
-            
-            localization_map = normalize_map(pred)
-            
-            pred_img = self.Image.fromarray(to_uint8(localization_map), mode="L")
-            upsampled_pred = pred_img.resize(original_size, self.Image.BILINEAR)
-            localization_map = np.array(upsampled_pred) / 255.0
-            
-            suspicious_ratio = float((localization_map >= 0.5).mean())
-            
-            localization_img = make_heatmap_image(self.Image, localization_map)
-            overlay_img = make_overlay_image(self.Image, rgb_image, localization_map)
-            
-            saved_files = None
-            if save:
-                base_name = Path(filename).stem
-                saved_files = {}
-                
-                loc_path = output_dir / f"{base_name}_localization.png"
-                localization_img.save(loc_path)
-                saved_files["localization_map"] = str(loc_path)
-                
-                overlay_path = output_dir / f"{base_name}_overlay.png"
-                overlay_img.save(overlay_path)
-                saved_files["overlay"] = str(overlay_path)
-            
-            return FassaLocalizationResult(
-                filename=Path(filename).name,
-                suspicious_ratio=suspicious_ratio,
-                localization_map_url=data_url_from_image(localization_img),
-                overlay_url=data_url_from_image(overlay_img),
-                saved_files=saved_files,
-            )
-        except Exception as e:
-            print(f"Error processing {filename}: {str(e)}")
-            return FassaLocalizationResult(
-                filename=Path(filename).name,
-                suspicious_ratio=0.0,
-                localization_map_url="",
-                overlay_url="",
-                saved_files=None,
-            )
-        finally:
-            del image_tensor, feature_tensor, pred, localization_map, rgb_image
-            if self.torch.cuda.is_available():
-                self.torch.cuda.empty_cache()
-            gc.collect()
-
     def _process_single_result_fast(
         self, filename: str, preprocessed_data: Dict, save: bool = False, output_dir: Path = Path("output")
     ) -> Optional[FassaLocalizationResult]:
-        """新方法：直接使用预处理好的数据"""
         image_tensor = feature_tensor = pred = localization_map = None
         try:
             t_tensor = time.time()
-            img_tensor = self.torch.from_numpy(preprocessed_data['img_normalized'])
-            feat_tensor = self.torch.from_numpy(preprocessed_data['features'])
+            img_tensor = self.torch.from_numpy(preprocessed_data["img_normalized"])
+            feat_tensor = self.torch.from_numpy(preprocessed_data["features"])
             print(f"[Timing-DEBUG] Create tensors {filename}: {time.time() - t_tensor:.3f}s")
-            
+
             t_to_gpu = time.time()
             image_tensor = img_tensor.unsqueeze(0).to(self.device)
             feature_tensor = feat_tensor.unsqueeze(0).to(self.device)
             print(f"[Timing-DEBUG] To GPU {filename}: {time.time() - t_to_gpu:.3f}s")
             print(f"[Timing] Tensor conversion {filename}: {time.time() - t_tensor:.3f}s")
-            
+
             t_infer = time.time()
             with self.torch.no_grad():
                 model_output = self.model(image_tensor, feature_tensor)
@@ -396,36 +327,36 @@ class FassaLocalizationEngine:
                 pred = self.torch.sigmoid(pred)[0, 0]
                 pred = pred.cpu().numpy()
             print(f"[Timing] Inference {filename}: {time.time() - t_infer:.3f}s")
-            
+
             localization_map = normalize_map(pred)
-            
-            rgb_image = preprocessed_data['rgb_image']
-            original_size = preprocessed_data['original_size']
-            
+
+            rgb_image = preprocessed_data["rgb_image"]
+            original_size = preprocessed_data["original_size"]
+
             pred_img = self.Image.fromarray(to_uint8(localization_map), mode="L")
             upsampled_pred = pred_img.resize(original_size, self.Image.BILINEAR)
             localization_map = np.array(upsampled_pred) / 255.0
-            
+
             suspicious_ratio = float((localization_map >= 0.5).mean())
-            
+
             localization_img = make_heatmap_image(self.Image, localization_map)
             overlay_img = make_overlay_image(self.Image, rgb_image, localization_map)
-            
+
             saved_files = None
             if save:
-                base_name = Path(filename).stem
+                base_name = safe_upload_stem(normalize_upload_filename(filename))
                 saved_files = {}
-                
+
                 loc_path = output_dir / f"{base_name}_localization.png"
                 localization_img.save(loc_path)
                 saved_files["localization_map"] = str(loc_path)
-                
+
                 overlay_path = output_dir / f"{base_name}_overlay.png"
                 overlay_img.save(overlay_path)
                 saved_files["overlay"] = str(overlay_path)
-            
+
             return FassaLocalizationResult(
-                filename=Path(filename).name,
+                filename=Path(normalize_upload_filename(filename)).name,
                 suspicious_ratio=suspicious_ratio,
                 localization_map_url=data_url_from_image(localization_img),
                 overlay_url=data_url_from_image(overlay_img),
@@ -434,7 +365,7 @@ class FassaLocalizationEngine:
         except Exception as e:
             print(f"Error processing {filename}: {str(e)}")
             return FassaLocalizationResult(
-                filename=Path(filename).name,
+                filename=Path(normalize_upload_filename(filename)).name,
                 suspicious_ratio=0.0,
                 localization_map_url="",
                 overlay_url="",
@@ -442,6 +373,9 @@ class FassaLocalizationEngine:
             )
         finally:
             del image_tensor, feature_tensor, pred, localization_map
+            if self.torch.cuda.is_available():
+                self.torch.cuda.empty_cache()
+            gc.collect()
 
     def predict_uploads(
         self, uploads: List[Tuple[str, BinaryIO]], save: bool = False, output_dir: Path = Path("output"),

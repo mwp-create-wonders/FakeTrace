@@ -11,7 +11,20 @@ from ..deps import (
     get_lota_engine,
     get_mf2da_engine,
     get_univfd_engine,
+    reset_detector_engine_cache,
 )
+
+
+def _is_cuda_runtime_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    cuda_markers = [
+        "out of memory",
+        "cuda",
+        "cublas",
+        "cudnn",
+        "device-side assert",
+    ]
+    return any(marker in message for marker in cuda_markers)
 
 
 @app.post("/api/predict")
@@ -56,9 +69,26 @@ async def predict(
             engine_name = "UnivFD"
         else:
             raise HTTPException(status_code=400, detail=f"Unknown image detector: {model}")
+
         results = engine.predict_uploads(uploads)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        if model != "marc" or not _is_cuda_runtime_error(exc):
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        try:
+            reset_detector_engine_cache()
+            engine = get_detector_engine("cpu")
+            engine_name = "MARC"
+            rewound_uploads = []
+            for filename, file_obj in uploads:
+                file_obj.seek(0)
+                rewound_uploads.append((filename, file_obj))
+            results = engine.predict_uploads(rewound_uploads)
+        except Exception as cpu_exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"GPU 推理失败，切换 CPU 重试后仍失败: {cpu_exc}",
+            ) from cpu_exc
 
     device = str(getattr(engine, "device", "unknown"))
     threshold = getattr(getattr(engine, "config", engine), "threshold", getattr(engine, "threshold", 0.5))

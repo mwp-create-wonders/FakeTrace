@@ -1,10 +1,14 @@
+from pathlib import Path
+
 import torch
-import torch.nn as nn
 import torch.hub
-import os
+import torch.nn as nn
 from torchvision import transforms
 
-hub_repo = "/root/.cache/torch/hub/facebookresearch_dinov2_main"
+
+def _resolve_local_hub_repo() -> Path:
+    hub_dir = Path(torch.hub.get_dir())
+    return hub_dir / "facebookresearch_dinov2_main"
 
 CHANNELS = {
     "dinov2_vits14": 384,
@@ -60,9 +64,10 @@ class DINOv2Model(nn.Module):
         self.name = name
         self.feat_dim = CHANNELS[name]
 
-        if os.path.exists(hub_repo):
+        hub_repo = _resolve_local_hub_repo()
+        if hub_repo.exists():
             print(f"Loading DINOv2 from local hub cache: {hub_repo}")
-            self.model = torch.hub.load(hub_repo, name, source="local", pretrained=True)
+            self.model = torch.hub.load(str(hub_repo), name, source="local", pretrained=True)
         else:
             print(f"Loading DINOv2 from hub: {name}")
             self.model = torch.hub.load("facebookresearch/dinov2", name, pretrained=True)

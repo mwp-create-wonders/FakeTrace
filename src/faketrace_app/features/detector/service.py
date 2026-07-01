@@ -5,6 +5,7 @@ from typing import BinaryIO, List, Tuple, Union
 
 from ...core.config import AppConfig
 from ...core.paths import MARC_MODEL_DIR, VALID_IMAGE_EXTS
+from ...core.uploads import normalize_upload_filename
 
 
 if str(MARC_MODEL_DIR) not in sys.path:
@@ -140,7 +141,7 @@ class MARCInferenceEngine:
             for filename, file_obj in batch:
                 image = self.Image.open(file_obj).convert("RGB")
                 images.append(self.transform(image))
-                labels.append(Path(filename))
+                labels.append(Path(normalize_upload_filename(filename)))
             results.extend(self._predict_batch(images, labels))
         return results
 
@@ -149,7 +150,7 @@ class MARCInferenceEngine:
         with self.torch.no_grad():
             output = self.model(tensor, return_feature=False, return_tokens=False)
             logits = output["binary_logits"].squeeze(1)
-            probs = self.torch.sigmoid(logits).detach().cpu().tolist()
+            probs = self.torch.sigmoid(logits).detach().cpu().flatten().tolist()
 
         predictions = []
         for label_path, prob in zip(labels, probs):

@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from ...core.paths import EFFUNETPP_MODEL_DIR
+from ...core.uploads import normalize_upload_filename, safe_upload_stem
 
 if str(EFFUNETPP_MODEL_DIR) not in sys.path:
     sys.path.insert(0, str(EFFUNETPP_MODEL_DIR))
@@ -142,14 +143,8 @@ class EffunetPPLocalizationEngine:
 
         print(f"Loading EffunetPP model from {model_path}")
 
-        model = self.net()
-
-        # checkpoint = self.torch.load(
-        #     model_path, map_location=self.device, weights_only=False
-        # )
-
-        model = self.torch.load(model_path, weights_only=False)
-        # model.load_state_dict(checkpoint["model_state_dict"])
+        # Load the serialized model directly onto the active device.
+        model = self.torch.load(model_path, map_location=self.device, weights_only=False)
         model = model.to(self.device)
         model.eval()
         return model
@@ -179,6 +174,7 @@ class EffunetPPLocalizationEngine:
             output_dir.mkdir(parents=True, exist_ok=True)
 
         for filename, file_obj in uploads:
+            normalized_name = normalize_upload_filename(filename)
             content = file_obj.read()
             if not content:
                 continue
@@ -189,35 +185,36 @@ class EffunetPPLocalizationEngine:
 
             with self.torch.no_grad():
                 pred, label = self.model(image_tensor)
-                pred = self.torch.argmax(pred, dim=1)
-                pred = self.torchvision.transforms.Compose(
-                    [
-                        self.torchvision.transforms.Resize(
-                            (original_size[1], original_size[0])
-                        )
-                    ]
-                )(pred).squeeze(0)
-            pred = pred.detach().numpy()
-            suspicious_ratio = float((pred >= 0.5).mean())
-            overlay_img = make_overlay_image(self.Image, image, pred)
+                pred = self.torch.argmax(pred, dim=1, keepdim=True).float()
+                pred = self.F.interpolate(
+                    pred,
+                    size=(original_size[1], original_size[0]),
+                    mode="nearest",
+                ).squeeze(0).squeeze(0)
 
-            pred = pred.astype(np.uint8) * 255
-            localization_img = Image.fromarray(pred)
-            score = 1 - self.F.sigmoid(label).item()
+            localization_map = pred.detach().cpu().numpy()
+            localization_map = normalize_map(localization_map)
+            suspicious_ratio = float((localization_map >= 0.5).mean())
+            overlay_img = make_overlay_image(self.Image, image, localization_map)
+
+            localization_img = self.Image.fromarray(to_uint8(localization_map), mode="L")
+            score = float(1.0 - self.torch.sigmoid(label).detach().cpu().item())
 
             saved_files = None
             if save:
-                base_name = Path(filename).stem
+                base_name = safe_upload_stem(normalized_name)
                 saved_files = {}
 
                 loc_path = output_dir / f"{base_name}_localization.png"
                 localization_img.save(loc_path)
+                saved_files["localization_map"] = str(loc_path)
                 overlay_path = output_dir / f"{base_name}_overlay.png"
                 overlay_img.save(overlay_path)
+                saved_files["overlay"] = str(overlay_path)
 
             results.append(
                 EffunetPPLocalizationResult(
-                    filename=Path(filename).name,
+                    filename=normalized_name,
                     suspicious_ratio=suspicious_ratio,
                     overlay_url=data_url_from_image(overlay_img),
                     localization_map_url=data_url_from_image(localization_img),

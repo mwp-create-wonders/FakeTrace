@@ -58,6 +58,8 @@ python app.py --image-dir path/to/images --save-json results.json --save-csv res
 ```
 
 ### 2. Web UI
+如果缺少对应权重，相关功能将无法正常加载。
+模型权重链接： https://pan.baidu.com/s/1DD6ILIBk3Tq0ZjSzb8sQoQ?pwd=0123 提取码: 0123
 
 启动本地 Web 服务：
 

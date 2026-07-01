@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 from functools import lru_cache
 
 from ..core.config import load_config
+from ..features.detector.service import MARCInferenceEngine
 
 
-@lru_cache(maxsize=1)
-def get_detector_engine():
-    from ..features.detector.service import MARCInferenceEngine
+@lru_cache(maxsize=2)
+def get_detector_engine(device: str | None = None) -> MARCInferenceEngine:
+    overrides = {"device": device} if device else None
+    return MARCInferenceEngine(load_config(overrides=overrides))
 
-    return MARCInferenceEngine(load_config())
+
+def reset_detector_engine_cache() -> None:
+    get_detector_engine.cache_clear()
 
 
 @lru_cache(maxsize=1)
