@@ -1,5 +1,9 @@
 import torch.nn as nn
-from .dinov2_models import DINOv2Model
+
+try:
+    from .dinov2_models import DINOv2Model
+except ImportError:
+    from dinov2_models import DINOv2Model
 
 
 class DINOv2ModelWithLoRA(nn.Module):
@@ -31,7 +35,10 @@ class DINOv2ModelWithLoRA(nn.Module):
         try:
             from .lora import apply_lora_to_linear_layers, get_lora_params
         except ImportError:
-            raise ImportError("LoRA module not found. Please check your installation.")
+            try:
+                from lora import apply_lora_to_linear_layers, get_lora_params
+            except ImportError as exc:
+                raise ImportError("LoRA module not found. Please check your installation.") from exc
 
         if lora_targets is None:
             lora_targets = ["attn.qkv", "attn.proj", "mlp.fc1", "mlp.fc2"]

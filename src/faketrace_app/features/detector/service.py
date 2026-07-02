@@ -8,8 +8,9 @@ from ...core.paths import MARC_MODEL_DIR, VALID_IMAGE_EXTS
 from ...core.uploads import normalize_upload_filename
 
 
-if str(MARC_MODEL_DIR) not in sys.path:
-    sys.path.insert(0, str(MARC_MODEL_DIR))
+MARC_PYTHON_DIR = MARC_MODEL_DIR / "models"
+if str(MARC_PYTHON_DIR) not in sys.path:
+    sys.path.insert(0, str(MARC_PYTHON_DIR))
 
 
 @dataclass
@@ -29,7 +30,7 @@ def import_runtime():
         import torch
         from PIL import Image
         from torchvision import transforms
-        from models.dinov2_models_lora import DINOv2ModelWithLoRA
+        from dinov2_models_lora import DINOv2ModelWithLoRA
     except ModuleNotFoundError as exc:
         missing = exc.name or "required package"
         raise RuntimeError(

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FakeTrace</title>
+    <title>FakeTrace Workbench</title>
     <link rel="stylesheet" href="/static/app.css">
   </head>
   <body>
@@ -11,56 +11,46 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">FakeTrace Workbench</p>
-          <h1>多模态数字取证工作台</h1>
-          <p class="subtitle">图像检测、篡改定位、音频检测、视频检测与项目安全扫描统一接入。</p>
+          <h1>AIGC多模态取证系统</h1>
+          <p class="subtitle">
+            支持图像、视频和音频的多模态取证功能
+          </p>
         </div>
-        <div class="hero-side">
-          <article class="status-card">
-            <p class="card-kicker">运行状态</p>
-            <p class="status" id="status">正在检查模型与扫描能力...</p>
-          </article>
-          <article class="status-card">
-            <p class="card-kicker">当前模式</p>
-            <p class="mode-title" id="modeTitle">图像检测</p>
-            <p class="mode-desc" id="modeDescription">批量图片真伪识别与概率输出</p>
-          </article>
+        <div class="status-card">
+          <span class="status-dot"></span>
+          <div>
+            <p class="status-label">运行状态</p>
+            <p class="status" id="status">正在检查 MARC、TruFor 与 ATADD 模型状态...</p>
+          </div>
         </div>
       </section>
 
       <section class="feature-tabs" aria-label="功能切换">
-        <button class="feature-tab active" type="button" data-mode="detector">图像检测</button>
-        <button class="feature-tab" type="button" data-mode="localizer">篡改定位</button>
-        <button class="feature-tab" type="button" data-mode="audio">音频检测</button>
-        <button class="feature-tab" type="button" data-mode="video">视频检测</button>
-        <button class="feature-tab" type="button" data-mode="security">安全扫描</button>
+        <button class="feature-tab active" id="tab-detector" type="button" data-mode="detector">图像检测</button>
+        <button class="feature-tab" id="tab-localizer" type="button" data-mode="localizer">图像篡改定位</button>
+        <button class="feature-tab" id="tab-audio" type="button" data-mode="audio">音频检测</button>
+        <button class="feature-tab" id="tab-video" type="button" data-mode="video">视频检测</button>
       </section>
 
       <section class="control-panel">
-        <div class="dropzone" id="dropzone">
-          <input id="fileInput" type="file" multiple>
-          <div class="dropzone-copy">
-            <span class="drop-label" id="dropLabel">输入区</span>
-            <strong id="dropTitle">拖拽文件到这里，或点击选择</strong>
-            <span id="dropHint">支持批量上传。</span>
-          </div>
-        </div>
+        <input id="fileInput" type="file" accept="image/*" multiple hidden>
 
         <div class="controls-row">
-          <div class="model-selector" id="modelSelector">
-            <label for="modelSelect" id="modelSelectLabel">选择模型</label>
-            <select id="modelSelect"></select>
+          <div class="model-selector" id="modelSelector" hidden>
+            <label for="modelSelect" id="modelSelectLabel">选择模型：</label>
+            <select id="modelSelect">
+              <option value="trufor">TruFor</option>
+              <option value="catnet">CAT-Net</option>
+              <option value="fassa">Fassa</option>
+              <option value="effunetpp">EffUnetPP</option>
+            </select>
           </div>
-          <div class="actions">
-            <button id="runButton" type="button" disabled>开始检测</button>
-            <button id="clearButton" type="button" disabled>清空</button>
-          </div>
-        </div>
-      </section>
 
-      <section class="workspace-head">
-        <div>
-          <p class="card-kicker">Results</p>
-          <h2>分析结果</h2>
+          <div class="actions">
+            <button id="pickButton" type="button">选择图片</button>
+            <button id="runButton" type="button" disabled>开始检测</button>
+            <button id="clearButton" type="button" disabled>清空类别</button>
+          </div>
         </div>
       </section>
 

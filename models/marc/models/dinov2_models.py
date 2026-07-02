@@ -6,9 +6,28 @@ import torch.nn as nn
 from torchvision import transforms
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+TORCH_HUB_DIR = PROJECT_ROOT / ".cache" / "torch" / "hub"
+
+
+def _configure_torch_hub_dir() -> Path:
+    TORCH_HUB_DIR.mkdir(parents=True, exist_ok=True)
+    torch.hub.set_dir(str(TORCH_HUB_DIR))
+    return TORCH_HUB_DIR
+
+
 def _resolve_local_hub_repo() -> Path:
-    hub_dir = Path(torch.hub.get_dir())
+    hub_dir = _configure_torch_hub_dir()
     return hub_dir / "facebookresearch_dinov2_main"
+
+
+TIMM_MODEL_NAMES = {
+    "dinov2_vits14": "vit_small_patch14_dinov2",
+    "dinov2_vitb14": "vit_base_patch14_dinov2",
+    "dinov2_vitl14": "vit_large_patch14_dinov2",
+    "dinov2_vitg14": "vit_giant_patch14_dinov2",
+}
+
 
 CHANNELS = {
     "dinov2_vits14": 384,
@@ -60,17 +79,10 @@ class DINOv2Model(nn.Module):
         if name not in CHANNELS:
             raise ValueError(f"Unsupported DINOv2 model name: {name}")
 
-        print(f"Loading DINOv2 from hub: {name}")
+        print(f"Loading DINOv2 offline backbone: {name}")
         self.name = name
         self.feat_dim = CHANNELS[name]
-
-        hub_repo = _resolve_local_hub_repo()
-        if hub_repo.exists():
-            print(f"Loading DINOv2 from local hub cache: {hub_repo}")
-            self.model = torch.hub.load(str(hub_repo), name, source="local", pretrained=True)
-        else:
-            print(f"Loading DINOv2 from hub: {name}")
-            self.model = torch.hub.load("facebookresearch/dinov2", name, pretrained=True)
+        self.model = self._build_offline_backbone(name)
 
         # 多头
         self.binary_head = nn.Linear(self.feat_dim, binary_num_classes)   # 默认 1 维，适合 BCEWithLogitsLoss
@@ -81,6 +93,36 @@ class DINOv2Model(nn.Module):
             hidden_dim=proj_hidden_dim,
             dropout=dropout,
         )
+
+    def _build_offline_backbone(self, name: str):
+        try:
+            import timm
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Missing dependency: timm. Install dependencies with: pip install -r requirements.txt"
+            ) from exc
+
+        model_name = TIMM_MODEL_NAMES.get(name)
+        if model_name is None:
+            raise ValueError(f"Unsupported offline DINOv2 backbone: {name}")
+
+        # The finetuned checkpoint stores 518x518 DINOv2 positional embeddings.
+        # `dynamic_img_size=True` keeps the pretrained grid while allowing smaller inputs like 336x336.
+        model = timm.create_model(
+            model_name,
+            pretrained=False,
+            img_size=518,
+            dynamic_img_size=True,
+        )
+
+        # Older Meta hub models expose this parameter; the finetuned checkpoint still contains it.
+        if not hasattr(model, "mask_token"):
+            model.register_parameter(
+                "mask_token",
+                nn.Parameter(torch.zeros(1, self.feat_dim), requires_grad=False),
+            )
+
+        return model
 
     def get_preprocessing_transforms(self, image_size=224):
         """
@@ -107,14 +149,18 @@ class DINOv2Model(nn.Module):
         if hasattr(self.model, "forward_features"):
             features_dict = self.model.forward_features(x)
 
-            if "x_norm_clstoken" in features_dict:
+            if isinstance(features_dict, dict) and "x_norm_clstoken" in features_dict:
                 cls_feature = features_dict["x_norm_clstoken"]
+                if return_tokens:
+                    patch_tokens = features_dict.get("x_norm_patchtokens", None)
+            elif isinstance(features_dict, torch.Tensor):
+                if features_dict.ndim != 3:
+                    raise ValueError(f"Unexpected tensor shape from forward_features: {tuple(features_dict.shape)}")
+                cls_feature = features_dict[:, 0]
+                if return_tokens:
+                    patch_tokens = features_dict[:, 1:]
             else:
                 raise KeyError("DINOv2 forward_features output missing 'x_norm_clstoken'")
-
-            if return_tokens:
-                # DINOv2 常见字段名是 x_norm_patchtokens
-                patch_tokens = features_dict.get("x_norm_patchtokens", None)
 
         else:
             # 兜底逻辑

@@ -1,4 +1,5 @@
 import io
+import traceback
 from typing import Literal
 
 from fastapi import File, HTTPException, Query, UploadFile
@@ -72,6 +73,7 @@ async def predict(
 
         results = engine.predict_uploads(uploads)
     except Exception as exc:
+        traceback.print_exc()
         if model != "marc" or not _is_cuda_runtime_error(exc):
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -85,6 +87,7 @@ async def predict(
                 rewound_uploads.append((filename, file_obj))
             results = engine.predict_uploads(rewound_uploads)
         except Exception as cpu_exc:
+            traceback.print_exc()
             raise HTTPException(
                 status_code=500,
                 detail=f"GPU 推理失败，切换 CPU 重试后仍失败: {cpu_exc}",
