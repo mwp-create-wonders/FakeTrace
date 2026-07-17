@@ -2,10 +2,13 @@ import io
 from pathlib import Path
 from typing import Literal
 
-from fastapi import File, HTTPException, UploadFile, Query
+from fastapi import File, HTTPException, UploadFile, Query, Request
+from fastapi.responses import FileResponse
 
 from ..app import app
 from ..deps import get_trufor_engine, get_catnet_engine, get_fassa_engine, get_effunetpp_engine
+from ...features.localization_report.service import build_localization_report, resolve_report_path
+from ...features.localization_report.task_store import create_localization_task
 
 
 @app.post("/api/localize")
@@ -67,7 +70,41 @@ async def localize(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    task = create_localization_task(model=model, image_count=len(results))
+
     return {
         "results": [item.to_dict() for item in results],
         "meta": meta,
+        "localization_task_id": task.id,
+        "localization_test_id": task.test_id,
     }
+
+
+@app.post("/api/localize/report")
+async def create_localization_report(request: Request):
+    try:
+        payload = await request.json()
+        generated = build_localization_report(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "report_id": generated.report_id,
+        "pdf_url": f"/api/localize/report/{generated.report_id}",
+        "download_url": f"/api/localize/report/{generated.report_id}?download=1",
+    }
+
+
+@app.get("/api/localize/report/{report_id}")
+def get_localization_report(report_id: str, download: bool = Query(False)):
+    try:
+        path = resolve_report_path(report_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    disposition = "attachment" if download else "inline"
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'{disposition}; filename="{path.name}"'},
+    )

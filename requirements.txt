@@ -13,3 +13,4 @@ timm
 fastapi
 uvicorn[standard]
 python-multipart
+reportlab

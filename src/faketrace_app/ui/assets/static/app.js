@@ -108,6 +108,7 @@ function initialModeFromLocation() {
 let mode = initialModeFromLocation();
 let selectedFiles = [];
 let previewUrls = [];
+let currentRunUploadTime = null;
 
 function currentFeature() {
   return featureConfig[mode];
@@ -305,6 +306,92 @@ function buildEndpoint() {
   return feature.endpoint;
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("读取图像失败。"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function collectExtraFields(item) {
+  const known = new Set([
+    "filename",
+    "suspicious_ratio",
+    "localization_map_url",
+    "overlay_url",
+    "confidence_map_url",
+    "score",
+    "saved_files",
+    "path",
+  ]);
+  return Object.fromEntries(
+    Object.entries(item).filter(([key, value]) => !known.has(key) && value != null && typeof value !== "object")
+  );
+}
+
+function renderReportActions(report) {
+  const panel = document.createElement("article");
+  panel.className = "result-card report-card";
+  panel.innerHTML = `
+    <div class="result-body">
+      <div class="result-head">
+        <p class="filename">取证报告已生成</p>
+        <span class="badge localizer">PDF</span>
+      </div>
+      <p class="verdict">您可以在线浏览报告，也可以下载到本地。</p>
+      <div class="report-actions">
+        <a class="report-link" href="${report.pdf_url}" target="_blank" rel="noopener">在线浏览 PDF</a>
+        <a class="report-link" href="${report.download_url}" download>下载 PDF</a>
+      </div>
+    </div>
+  `;
+  results.prepend(panel);
+}
+
+async function maybeOfferLocalizationReport(items, modelName, testId) {
+  const wantsReport = window.confirm("伪造定位已完成。是否需要取证报告？");
+  if (!wantsReport) {
+    return;
+  }
+
+  const includeAiAnalysis = window.confirm("是否需要大模型为您解析定位结果？");
+  renderSummary(includeAiAnalysis ? "正在生成取证报告，并调用大模型解析定位结果..." : "正在生成取证报告...");
+
+  const originalImageUrls = await Promise.all(selectedFiles.map((file) => fileToDataUrl(file)));
+  const reportItems = items.map((item, index) => ({
+    filename: item.filename || selectedFiles[index]?.name || `image_${index + 1}.png`,
+    original_image_url: originalImageUrls[index],
+    localization_map_url: item.localization_map_url,
+    overlay_url: item.overlay_url,
+    suspicious_ratio: Number(item.suspicious_ratio || 0),
+    score: item.score == null ? null : Number(item.score),
+    confidence_map_url: item.confidence_map_url || null,
+    extra_fields: collectExtraFields(item),
+  }));
+
+  const response = await fetch("/api/localize/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: modelSelect.value,
+      model_name: modelName,
+      test_id: testId,
+      upload_time: currentRunUploadTime,
+      include_ai_analysis: includeAiAnalysis,
+      items: reportItems,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || "报告生成失败。");
+  }
+
+  renderSummary("取证报告生成完成。");
+  renderReportActions(data);
+}
+
 async function runCurrentFeature() {
   if (!selectedFiles.length) {
     return;
@@ -317,6 +404,7 @@ async function runCurrentFeature() {
 
   const formData = new FormData();
   selectedFiles.forEach((file) => formData.append("files", file));
+  currentRunUploadTime = new Date().toISOString();
 
   try {
     const response = await fetch(buildEndpoint(), {
@@ -335,7 +423,13 @@ async function runCurrentFeature() {
     } else if (mode === "video") {
       renderBinaryResults(data.results, data.meta?.model || currentModelLabel(), "视频");
     } else {
-      renderLocalizerResults(data.results, data.meta?.model || currentModelLabel());
+      const modelName = data.meta?.model || currentModelLabel();
+      renderLocalizerResults(data.results, modelName);
+      window.setTimeout(() => {
+        maybeOfferLocalizationReport(data.results, modelName, data.localization_test_id).catch((error) => {
+          setMessage(error.message);
+        });
+      }, 80);
     }
   } catch (error) {
     setMessage(error.message);
