@@ -6,6 +6,7 @@ from fastapi import File, HTTPException, Query, UploadFile
 
 from ..app import app
 from ..deps import get_audio_engine
+from ...features.audio_report.task_store import create_audio_task
 
 
 @app.post("/api/audio/predict")
@@ -35,6 +36,8 @@ async def predict_audio(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    task = create_audio_task(model=model, audio_count=len(results))
+
     return {
         "results": [item.to_dict() for item in results],
         "meta": {
@@ -46,4 +49,6 @@ async def predict_audio(
             "sample_rate": engine.config.sample_rate,
             "max_seconds": engine.config.max_seconds,
         },
+        "audio_task_id": task.id,
+        "audio_test_id": task.test_id,
     }

@@ -389,6 +389,45 @@ function renderReportActions(report) {
   results.prepend(panel);
 }
 
+async function maybeOfferAudioReport(items, modelName, testId) {
+  const wantsReport = window.confirm("语音伪造检测已完成。是否需要取证报告？");
+  if (!wantsReport) {
+    return;
+  }
+
+  const includeAiAnalysis = window.confirm("是否需要大模型为您解析检测结果？");
+  renderSummary(includeAiAnalysis ? "正在生成取证报告，并调用大模型解析检测结果..." : "正在生成取证报告...");
+
+  const audioUrls = await Promise.all(selectedFiles.map((file) => fileToDataUrl(file)));
+  const reportItems = items.map((item, index) => ({
+    filename: item.filename || selectedFiles[index]?.name || `audio_${index + 1}.wav`,
+    audio_url: audioUrls[index],
+    prediction: item.prediction,
+    fake_probability: Number(item.fake_probability || 0),
+    real_probability: Number(item.real_probability || 0),
+  }));
+
+  const response = await fetch("/api/audio/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: modelSelect.value,
+      model_name: modelName,
+      test_id: testId,
+      upload_time: currentRunUploadTime,
+      include_ai_analysis: includeAiAnalysis,
+      items: reportItems,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || "报告生成失败。");
+  }
+
+  renderSummary("取证报告生成完成。");
+  renderReportActions(data);
+}
+
 async function maybeOfferLocalizationReport(items, modelName, testId) {
   const wantsReport = window.confirm("伪造定位已完成。是否需要取证报告？");
   if (!wantsReport) {
@@ -464,7 +503,13 @@ async function runCurrentFeature() {
         });
       }, 80);
     } else if (mode === "audio") {
-      renderBinaryResults(data.results, data.meta?.model || currentModelLabel(), "音频");
+      const modelName = data.meta?.model || currentModelLabel();
+      renderBinaryResults(data.results, modelName, "音频");
+      window.setTimeout(() => {
+        maybeOfferAudioReport(data.results, modelName, data.audio_test_id).catch((error) => {
+          setMessage(error.message);
+        });
+      }, 80);
     } else if (mode === "video") {
       renderBinaryResults(data.results, data.meta?.model || currentModelLabel(), "视频");
     } else {

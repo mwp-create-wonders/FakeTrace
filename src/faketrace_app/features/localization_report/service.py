@@ -106,6 +106,32 @@ def _register_fonts() -> tuple[str, str, str, str]:
                 break
         return "FakeTraceSongti", "FakeTraceSongtiBold", "FakeTraceTimes", header_cn_font
 
+    # Windows keeps the same Songti/Hei/Times pairing using the system CJK fonts.
+    windows_songti_path = Path("C:/Windows/Fonts/simsun.ttc")
+    if windows_songti_path.exists():
+        pdfmetrics.registerFont(TTFont("FakeTraceSongti", str(windows_songti_path), subfontIndex=0))
+
+        bold_path = Path("C:/Windows/Fonts/simhei.ttf")
+        if bold_path.exists():
+            pdfmetrics.registerFont(TTFont("FakeTraceSongtiBold", str(bold_path)))
+            bold_font = "FakeTraceSongtiBold"
+        else:
+            bold_font = "FakeTraceSongti"
+
+        windows_times_path = Path("C:/Windows/Fonts/times.ttf")
+        if windows_times_path.exists():
+            pdfmetrics.registerFont(TTFont("FakeTraceTimes", str(windows_times_path)))
+            times_font = "FakeTraceTimes"
+        else:
+            times_font = "Times-Roman"
+
+        header_cn_font = "FakeTraceSongti"
+        fang_song_path = Path("C:/Windows/Fonts/simfang.ttf")
+        if fang_song_path.exists():
+            pdfmetrics.registerFont(TTFont("FakeTraceFangSong", str(fang_song_path)))
+            header_cn_font = "FakeTraceFangSong"
+        return "FakeTraceSongti", bold_font, times_font, header_cn_font
+
     # Fallback keeps PDF generation available on Linux servers. It will not be
     # as close to the sample macOS/WPS typography as the Songti/Times setup.
     try:
