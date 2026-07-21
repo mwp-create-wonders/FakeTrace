@@ -1,112 +1,127 @@
+from __future__ import annotations
+
+from pathlib import Path
+
 from ...core.config import load_config
+from ...core.paths import (
+    FORENSIC_MOE_MODEL_DIR,
+    FORGELENS_MODEL_DIR,
+    LOTA_MODEL_DIR,
+    MF2DA_MODEL_DIR,
+    TRI_MODEL_DIR,
+    UNIVFD_MODEL_DIR,
+)
 from ...features.trufor.service import build_default_config
 from ..app import app
-from ..deps import (
-    get_audio_engine,
-    get_forensic_moe_engine,
-    get_forgelens_engine,
-    get_lota_engine,
-    get_mf2da_engine,
-    get_tri_engine,
-    get_trufor_engine,
-    get_univfd_engine,
-)
+
+
+def _status_from_files(model: str, *paths: Path, extra: dict | None = None) -> dict:
+    resolved_paths = [Path(path).expanduser().resolve() for path in paths]
+    missing = [str(path) for path in resolved_paths if not path.is_file()]
+    status = {
+        "ready": not missing,
+        "model": model,
+    }
+    if resolved_paths:
+        status["checkpoints"] = [str(path) for path in resolved_paths]
+        status["checkpoint"] = str(resolved_paths[0])
+    if extra:
+        status.update(extra)
+    if missing:
+        status["detail"] = f"Missing required file(s): {', '.join(missing)}"
+    return status
 
 
 @app.get("/api/status")
 def status():
-    detector_status = {"ready": False}
+    detector_status = {"ready": False, "model": "MARC"}
+    audio_status = {"ready": False, "model": "ATADD AST", "model_id": "ast_audioset_ft"}
     try:
-        detector_config = load_config()
-        detector_status = {
-            "ready": detector_config.checkpoint.is_file(),
-            "device": detector_config.device,
-            "checkpoint": str(detector_config.checkpoint),
-            "threshold": detector_config.threshold,
-            "image_size": detector_config.image_size,
-            "batch_size": detector_config.batch_size,
-            "model": "MARC",
-        }
-        if not detector_status["ready"]:
-            detector_status["detail"] = f"Checkpoint not found: {detector_config.checkpoint}"
+        app_config = load_config()
+        detector_status = _status_from_files(
+            "MARC",
+            app_config.checkpoint,
+            extra={
+                "device": app_config.device,
+                "threshold": app_config.threshold,
+                "image_size": app_config.image_size,
+                "batch_size": app_config.batch_size,
+            },
+        )
+
+        if app_config.audio is not None:
+            audio_status = _status_from_files(
+                "ATADD AST",
+                app_config.audio.checkpoint,
+                extra={
+                    "device": app_config.audio.device,
+                    "threshold": app_config.audio.threshold,
+                    "config_model": app_config.audio.model.name,
+                    "sample_rate": app_config.audio.sample_rate,
+                    "max_seconds": app_config.audio.max_seconds,
+                    "batch_size": app_config.audio.batch_size,
+                    "model_id": "ast_audioset_ft",
+                },
+            )
+        else:
+            audio_status = {
+                "ready": False,
+                "model": "ATADD AST",
+                "model_id": "ast_audioset_ft",
+                "detail": "Audio is not configured in configs/default.json.",
+            }
     except Exception as exc:
         detector_status = {"ready": False, "model": "MARC", "detail": str(exc)}
+        if "detail" not in audio_status:
+            audio_status = {**audio_status, "detail": str(exc)}
 
-    audio_status = {"ready": False}
-    try:
-        audio = get_audio_engine()
-        audio_status = {
-            "ready": True,
-            "device": str(audio.device),
-            "checkpoint": str(audio.config.checkpoint),
-            "threshold": audio.config.threshold,
-            "model": audio.config.model.name,
-            "sample_rate": audio.config.sample_rate,
-            "max_seconds": audio.config.max_seconds,
-            "batch_size": audio.config.batch_size,
-        }
-    except Exception as exc:
-        audio_status = {"ready": False, "detail": str(exc)}
-
-    trufor_status = {"ready": False}
+    trufor_status = {"ready": False, "model": "TruFor"}
     try:
         trufor_config = build_default_config()
-        trufor_status = {
-            "ready": trufor_config.model_file.is_file(),
-            "device": trufor_config.device,
-            "experiment": trufor_config.experiment,
-            "model_file": str(trufor_config.model_file),
-            "model": "TruFor",
-        }
-        if not trufor_status["ready"]:
-            trufor_status["detail"] = f"Model file not found: {trufor_config.model_file}"
+        trufor_status = _status_from_files(
+            "TruFor",
+            trufor_config.model_file,
+            extra={
+                "device": trufor_config.device,
+                "experiment": trufor_config.experiment,
+                "model_file": str(trufor_config.model_file),
+            },
+        )
     except Exception as exc:
         trufor_status = {"ready": False, "model": "TruFor", "detail": str(exc)}
 
     image_models = {
         "marc": detector_status,
-        "forensic_moe": {"ready": False, "model": "Forensic-MoE"},
-        "forgelens": {"ready": False, "model": "ForgeLens"},
-        "lota": {"ready": False, "model": "LOTA"},
-        "mf2da": {"ready": False, "model": "MF2DA"},
-        "univfd": {"ready": False, "model": "UnivFD"},
+        "forensic_moe": _status_from_files(
+            "Forensic-MoE",
+            FORENSIC_MOE_MODEL_DIR / "checkpoints" / "detector.pth",
+            FORENSIC_MOE_MODEL_DIR / "checkpoints" / "CLIP.pt",
+        ),
+        "forgelens": _status_from_files(
+            "ForgeLens",
+            FORGELENS_MODEL_DIR / "GenImage.pth",
+            FORENSIC_MOE_MODEL_DIR / "checkpoints" / "CLIP.pt",
+        ),
+        "lota": _status_from_files(
+            "LOTA",
+            LOTA_MODEL_DIR / "lota_weights" / "Network_best.pth",
+        ),
+        "mf2da": _status_from_files(
+            "MF2DA",
+            MF2DA_MODEL_DIR / "weights" / "model_epoch_best.pth",
+        ),
+        "univfd": _status_from_files(
+            "UnivFD",
+            UNIVFD_MODEL_DIR / "checkpoints" / "fc_weights.pth",
+        ),
     }
 
-    for key, getter, label in (
-        ("forensic_moe", get_forensic_moe_engine, "Forensic-MoE"),
-        ("forgelens", get_forgelens_engine, "ForgeLens"),
-        ("lota", get_lota_engine, "LOTA"),
-        ("mf2da", get_mf2da_engine, "MF2DA"),
-        ("univfd", get_univfd_engine, "UnivFD"),
-    ):
-        try:
-            engine = getter()
-            image_models[key] = {
-                "ready": True,
-                "model": label,
-                "device": str(getattr(engine, "device", "unknown")),
-                "checkpoint": str(getattr(engine, "checkpoint_path", "")),
-            }
-        except Exception as exc:
-            image_models[key] = {"ready": False, "model": label, "detail": str(exc)}
-
-    video_status = {"ready": False}
-    try:
-        tri = get_tri_engine()
-        video_status = {
-            "ready": True,
-            "model": "TRI",
-            "device": str(getattr(tri, "device", "unknown")),
-            "threshold": float(getattr(tri, "classifier_threshold", 0.5)),
-        }
-    except Exception as exc:
-        video_status = {"ready": False, "model": "TRI", "detail": str(exc)}
-
-    try:
-        get_trufor_engine()
-    except Exception as exc:
-        if "detail" not in trufor_status:
-            trufor_status = {**trufor_status, "detail": str(exc)}
+    video_status = _status_from_files(
+        "TRI",
+        TRI_MODEL_DIR / "models" / "weights" / "D3.pth",
+        TRI_MODEL_DIR / "models" / "weights" / "xclip-base-patch16" / "config.json",
+        extra={"threshold": 0.5},
+    )
 
     return {
         "ready": (
@@ -120,5 +135,8 @@ def status():
         "audio": audio_status,
         "trufor": trufor_status,
         "image_models": image_models,
+        "audio_models": {
+            "ast_audioset_ft": audio_status,
+        },
         "video": video_status,
     }

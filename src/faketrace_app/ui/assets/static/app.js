@@ -91,7 +91,7 @@ const modelOptions = {
   audio: {
     label: "音频模型：",
     disabled: true,
-    options: [{ value: "atadd_ast", label: "ATADD AST" }],
+    options: [{ value: "ast_audioset_ft", label: "ATADD AST" }],
   },
   video: {
     label: "视频模型：",
@@ -300,7 +300,7 @@ async function loadStatus() {
 function buildEndpoint() {
   const feature = currentFeature();
   const modelValue = modelSelect.value;
-  if (mode === "detector" || mode === "localizer" || mode === "video") {
+  if (mode === "detector" || mode === "localizer" || mode === "audio" || mode === "video") {
     return `${feature.endpoint}?model=${encodeURIComponent(modelValue)}`;
   }
   return feature.endpoint;

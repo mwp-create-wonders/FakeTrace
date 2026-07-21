@@ -1,16 +1,20 @@
+from __future__ import annotations
+
 import argparse
 import csv
 import json
+import sys
 from pathlib import Path
 
+from .audio_cli import AUDIO_COMMANDS, main as audio_main
 from .config import load_config
 from .inference_engine import MARCInferenceEngine, collect_image_paths
 from .paths import DEFAULT_CONFIG_PATH
 
 
-def parse_args():
+def _build_image_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="FakeTrace real/fake image detector CLI",
+        description="FakeTrace image detector CLI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     input_group = parser.add_mutually_exclusive_group(required=True)
@@ -31,10 +35,33 @@ def parse_args():
     parser.add_argument("--threshold", type=float, default=None, help="Override real/fake threshold.")
     parser.add_argument("--save-json", default="", help="Optional JSON output path.")
     parser.add_argument("--save-csv", default="", help="Optional CSV output path.")
-    return parser.parse_args()
+    return parser
 
 
-def build_overrides(args) -> dict:
+def _print_root_help() -> None:
+    parser = argparse.ArgumentParser(
+        prog="app.py",
+        description="FakeTrace unified CLI for image and audio workflows",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.epilog = (
+        "Examples:\n"
+        "  python3 app.py --image sample.jpg\n"
+        "  python3 app.py detect --image-dir ./images --recursive\n"
+        "  python3 app.py audio audio-predict --config configs/audio/ast_audioset_ft.yaml \\\n"
+        "    --checkpoint models/audio/best.pt --audio-dir ./audio --output-dir ./output/audio\n"
+        "  python3 audio_app.py audio-predict ...  # legacy wrapper"
+    )
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        help="Use 'detect' for image CLI or 'audio' for audio experiment commands.",
+    )
+    parser.print_help()
+    print("\nAudio commands:", ", ".join(sorted(AUDIO_COMMANDS)))
+
+
+def _build_overrides(args: argparse.Namespace) -> dict:
     overrides = {}
     for key in ("checkpoint", "device", "batch_size", "image_size", "threshold"):
         value = getattr(args, key)
@@ -43,7 +70,7 @@ def build_overrides(args) -> dict:
     return overrides
 
 
-def print_results(results, threshold):
+def _print_results(results, threshold: float) -> None:
     print("\nFakeTrace CLI inference")
     print(f"Threshold: real_probability >= {threshold:.3f} => real")
     print("-" * 92)
@@ -60,7 +87,7 @@ def print_results(results, threshold):
     print(f"Total: {len(results)} image(s)\n")
 
 
-def save_outputs(results, save_json, save_csv):
+def _save_outputs(results, save_json: str, save_csv: str) -> None:
     rows = [item.to_dict() for item in results]
     if save_json:
         json_path = Path(save_json).expanduser().resolve()
@@ -88,17 +115,36 @@ def save_outputs(results, save_json, save_csv):
         print(f"Saved CSV: {csv_path}")
 
 
-def main():
-    args = parse_args()
+def _run_image_cli(argv: list[str]) -> None:
+    args = _build_image_parser().parse_args(argv)
     source_paths = args.image if args.image else [args.image_dir]
     paths = collect_image_paths(source_paths, recursive=args.recursive)
-    config = load_config(args.config, build_overrides(args))
+    config = load_config(args.config, _build_overrides(args))
     engine = MARCInferenceEngine(config)
     results = engine.predict_paths(paths)
     print(f"Device: {engine.device}")
     print(f"Checkpoint: {config.checkpoint}")
-    print_results(results, config.threshold)
-    save_outputs(results, args.save_json, args.save_csv)
+    _print_results(results, config.threshold)
+    _save_outputs(results, args.save_json, args.save_csv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] in {"-h", "--help", "help"}:
+        _print_root_help()
+        return
+
+    head = argv[0]
+    if head in {"audio", "aud"}:
+        audio_main(argv[1:])
+        return
+    if head in AUDIO_COMMANDS:
+        audio_main(argv)
+        return
+    if head in {"detect", "image"}:
+        _run_image_cli(argv[1:])
+        return
+    _run_image_cli(argv)
 
 
 if __name__ == "__main__":

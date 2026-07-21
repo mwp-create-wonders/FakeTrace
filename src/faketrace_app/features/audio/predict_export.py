@@ -186,7 +186,7 @@ def run_predict(args: argparse.Namespace) -> dict:
         pin_memory=(device.type == "cuda"),
     )
     model = build_model(cfg, device=device, init_checkpoint=args.checkpoint)
-    model.load_state_dict(load_checkpoint_state(args.checkpoint, device), strict=True)
+    model.load_state_dict(load_checkpoint_state(args.checkpoint, device, model=model), strict=True)
     fake_threshold, threshold_summary = resolve_fake_threshold(args)
 
     predict_csv = output_dir / "predict.csv"

@@ -26,14 +26,17 @@ def load_audio_mono(path: str | Path, torchaudio_module=None) -> tuple[torch.Ten
             if fallback_error is not None
             else f"Unable to decode audio file {audio_path}"
         )
-        raise RuntimeError(f"{message}; install soundfile for FLAC/WAV fallback.") from exc
+        raise RuntimeError(
+            f"{message}; install soundfile for FLAC/WAV fallback, or convert the file to WAV/FLAC."
+        ) from exc
 
     try:
         data, sample_rate = sf.read(audio_path, dtype="float32", always_2d=True)
     except Exception as exc:
         if fallback_error is not None:
             raise RuntimeError(
-                f"Unable to decode audio file {audio_path} with torchaudio or soundfile."
+                f"Unable to decode audio file {audio_path} with torchaudio or soundfile. "
+                "This environment is most reliable with WAV/FLAC inputs."
             ) from exc
         raise
 

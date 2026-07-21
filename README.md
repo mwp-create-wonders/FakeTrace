@@ -75,10 +75,12 @@ http://127.0.0.1:7860
 
 ### 3. 音频实验 CLI
 
+音频能力现已并入统一入口，推荐使用 `app.py`。`audio_app.py` 仍保留为兼容封装。
+
 健康检查：
 
 ```bash
-python audio_app.py audio-healthcheck ^
+python app.py audio audio-healthcheck ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --manifest data/manifests/val.csv ^
   --output-dir output/audio_healthcheck
@@ -87,7 +89,7 @@ python audio_app.py audio-healthcheck ^
 训练：
 
 ```bash
-python audio_app.py audio-train ^
+python app.py audio audio-train ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --train-manifest data/manifests/train.csv ^
   --val-manifest data/manifests/val.csv ^
@@ -98,7 +100,7 @@ python audio_app.py audio-train ^
 评估：
 
 ```bash
-python audio_app.py audio-eval ^
+python app.py audio audio-eval ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --manifest data/manifests/val.csv ^
@@ -109,7 +111,7 @@ python audio_app.py audio-eval ^
 批量预测：
 
 ```bash
-python audio_app.py audio-predict ^
+python app.py audio audio-predict ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --audio-dir data/eval_audio ^
@@ -121,7 +123,7 @@ python audio_app.py audio-predict ^
 阈值扫描：
 
 ```bash
-python audio_app.py audio-threshold-scan ^
+python app.py audio audio-threshold-scan ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --manifest data/manifests/val.csv ^

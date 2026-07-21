@@ -94,7 +94,7 @@ def run_threshold_scan(args: argparse.Namespace) -> dict:
         pin_memory=(device.type == "cuda"),
     )
     model = build_model(cfg, device=device, init_checkpoint=args.checkpoint)
-    model.load_state_dict(load_checkpoint_state(args.checkpoint, device), strict=True)
+    model.load_state_dict(load_checkpoint_state(args.checkpoint, device, model=model), strict=True)
 
     y_true, fake_prob, sample_types = collect_probabilities(model, loader, device=device)
     thresholds = build_threshold_grid(args)

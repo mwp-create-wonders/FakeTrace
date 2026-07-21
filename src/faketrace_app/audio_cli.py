@@ -2,6 +2,15 @@ from __future__ import annotations
 
 import argparse
 
+
+AUDIO_COMMANDS = {
+    "audio-train",
+    "audio-eval",
+    "audio-predict",
+    "audio-threshold-scan",
+    "audio-healthcheck",
+}
+
 def _run_train(args: argparse.Namespace):
     from .features.audio.experiment import run_train
 
@@ -124,8 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
     args.func(args)
 
 

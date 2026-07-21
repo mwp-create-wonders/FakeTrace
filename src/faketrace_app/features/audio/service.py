@@ -44,6 +44,59 @@ def import_runtime():
     return torch, torchaudio, nn, AutoFeatureExtractor, AutoModel, AutoProcessor
 
 
+def load_checkpoint(torch_module, checkpoint_path: Path, device):
+    try:
+        return torch_module.load(checkpoint_path, map_location=device, weights_only=True)
+    except TypeError:
+        return torch_module.load(checkpoint_path, map_location=device)
+    except Exception:
+        return torch_module.load(checkpoint_path, map_location=device, weights_only=False)
+
+
+def _remap_legacy_ast_key(key: str) -> str:
+    replacements = (
+        ("backbone.encoder.layer.", "backbone.layers."),
+        (".attention.attention.query.", ".attention.q_proj."),
+        (".attention.attention.key.", ".attention.k_proj."),
+        (".attention.attention.value.", ".attention.v_proj."),
+        (".attention.output.dense.", ".attention.o_proj."),
+        (".intermediate.dense.", ".mlp.fc1."),
+        (".output.dense.", ".mlp.fc2."),
+    )
+    remapped = key
+    for source, target in replacements:
+        remapped = remapped.replace(source, target)
+    return remapped
+
+
+def adapt_state_dict_for_model(state_dict: dict, model) -> tuple[dict, dict]:
+    current_state = model.state_dict()
+    direct_matches = 0
+    remapped_matches = 0
+    adapted_state = {}
+
+    for key, value in state_dict.items():
+        if key in current_state and getattr(current_state[key], "shape", None) == getattr(value, "shape", None):
+            adapted_state[key] = value
+            direct_matches += 1
+            continue
+
+        remapped_key = _remap_legacy_ast_key(key)
+        if remapped_key in current_state and getattr(current_state[remapped_key], "shape", None) == getattr(value, "shape", None):
+            adapted_state[remapped_key] = value
+            remapped_matches += 1
+            continue
+
+        adapted_state[key] = value
+
+    stats = {
+        "direct_matches": direct_matches,
+        "remapped_matches": remapped_matches,
+        "total_input_keys": len(state_dict),
+    }
+    return adapted_state, stats
+
+
 def resolve_device(torch, device_name: str):
     if device_name == "auto":
         return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -329,9 +382,15 @@ class AudioDeepfakeEngine:
 
         model_cls = self._build_model_class()
         model = model_cls(self.config).to(self.device)
-        checkpoint = self.torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = load_checkpoint(self.torch, checkpoint_path, self.device)
         state_dict = checkpoint.get("model_state", checkpoint) if isinstance(checkpoint, dict) else checkpoint
-        model.load_state_dict(state_dict, strict=True)
+        adapted_state, stats = adapt_state_dict_for_model(state_dict, model)
+        model.load_state_dict(adapted_state, strict=True)
+        if stats["remapped_matches"] > 0:
+            print(
+                "Applied legacy AST checkpoint key remapping: "
+                f"{stats['remapped_matches']} remapped, {stats['direct_matches']} direct."
+            )
         model.eval()
         return model
 

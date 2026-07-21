@@ -30,12 +30,12 @@ python app.py --image-dir path/to/images --save-json results.json --save-csv res
 
 ### Audio experiments
 
-ATADD-style audio training, evaluation, and batch export live behind `audio_app.py`.
+ATADD-style audio training, evaluation, and batch export are available from the unified `app.py audio ...` entrypoint. `audio_app.py` remains as a compatibility wrapper.
 
 Check that the config, manifest, audio decoding, resampling, and padding/cropping path works:
 
 ```bash
-python audio_app.py audio-healthcheck ^
+python app.py audio audio-healthcheck ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --manifest data/manifests/val.csv ^
   --output-dir output/audio_healthcheck
@@ -44,7 +44,7 @@ python audio_app.py audio-healthcheck ^
 Train from CSV manifests:
 
 ```bash
-python audio_app.py audio-train ^
+python app.py audio audio-train ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --train-manifest data/manifests/train.csv ^
   --val-manifest data/manifests/val.csv ^
@@ -55,7 +55,7 @@ python audio_app.py audio-train ^
 Evaluate a checkpoint:
 
 ```bash
-python audio_app.py audio-eval ^
+python app.py audio audio-eval ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --manifest data/manifests/val.csv ^
@@ -66,7 +66,7 @@ python audio_app.py audio-eval ^
 Export `predict.csv`, optional probabilities, and `submission.zip`:
 
 ```bash
-python audio_app.py audio-predict ^
+python app.py audio audio-predict ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --audio-dir data/eval_audio ^
@@ -78,7 +78,7 @@ python audio_app.py audio-predict ^
 Scan fake-probability thresholds on a labeled manifest:
 
 ```bash
-python audio_app.py audio-threshold-scan ^
+python app.py audio audio-threshold-scan ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --manifest data/manifests/val.csv ^
@@ -89,7 +89,7 @@ python audio_app.py audio-threshold-scan ^
 Use the best threshold from a scan summary:
 
 ```bash
-python audio_app.py audio-predict ^
+python app.py audio audio-predict ^
   --config configs/audio/ast_audioset_ft.yaml ^
   --checkpoint output/audio_ast/best.pt ^
   --audio-dir data/eval_audio ^
@@ -127,7 +127,7 @@ http://127.0.0.1:7860
 - `src/faketrace_app/inference_engine.py`: shared model loading and prediction logic
 - `src/faketrace_app/cli.py`: command line entry point used by `app.py`
 - `src/faketrace_app/web.py`: FastAPI app used by `web_app.py`
-- `src/faketrace_app/audio_cli.py`: audio experiment command line entry point used by `audio_app.py`
+- `src/faketrace_app/audio_cli.py`: audio experiment subcommands used by the unified CLI and the legacy `audio_app.py` wrapper
 - `models/marc/`: MARC detection implementation
 - `models/trufor/`: TruFor localization implementation
 

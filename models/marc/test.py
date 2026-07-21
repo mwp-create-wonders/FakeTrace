@@ -4,12 +4,14 @@ import csv
 import random
 import warnings
 import argparse
+import time
 
 warnings.filterwarnings("ignore")
 
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.profiler import profile, ProfilerActivity
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
@@ -174,6 +176,8 @@ def parse_args():
     parser.add_argument("--save_json", type=str, default="")
     parser.add_argument("--save_csv", type=str, default="")
     parser.add_argument("--resume_strict", type=int, default=1)
+    parser.add_argument("--benchmark_warmup", type=int, default=10)
+    parser.add_argument("--benchmark_iters", type=int, default=50)
 
     args = parser.parse_args()
 
@@ -336,6 +340,114 @@ def pretty_print_results(results):
     print("======================================================\n")
 
 
+def format_metric(value):
+    if value is None:
+        return "N/A"
+    return f"{value:.6f}"
+
+
+def get_trainable_params_m(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6
+
+
+def get_model_size_mb(checkpoint_path):
+    return os.path.getsize(checkpoint_path) / (1024 * 1024)
+
+
+def estimate_gflops(model, sample_images, device):
+    activities = [ProfilerActivity.CPU]
+    if device.type == "cuda":
+        activities.append(ProfilerActivity.CUDA)
+
+    try:
+        with torch.no_grad():
+            with profile(
+                activities=activities,
+                record_shapes=False,
+                profile_memory=False,
+                with_flops=True,
+            ) as prof:
+                _ = model(sample_images, return_feature=False, return_tokens=False)
+        total_flops = sum(getattr(evt, "flops", 0) or 0 for evt in prof.key_averages())
+        if total_flops <= 0:
+            return None
+        return total_flops / 1e9
+    except Exception as exc:
+        print(f"[Benchmark] Failed to estimate GFLOPs: {exc}")
+        return None
+
+
+def benchmark_inference(model, sample_images, device, warmup=10, iters=50):
+    if warmup < 0 or iters <= 0:
+        raise ValueError("benchmark_warmup must be >= 0 and benchmark_iters must be > 0")
+
+    model.eval()
+
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
+
+    with torch.no_grad():
+        for _ in range(warmup):
+            _ = model(sample_images, return_feature=False, return_tokens=False)
+
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+    start = time.perf_counter()
+    with torch.no_grad():
+        for _ in range(iters):
+            _ = model(sample_images, return_feature=False, return_tokens=False)
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    elapsed = time.perf_counter() - start
+
+    batch_size = sample_images.shape[0]
+    inference_time_ms = elapsed * 1000.0 / (iters * batch_size)
+
+    peak_gpu_memory_mb = None
+    if device.type == "cuda":
+        peak_gpu_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 * 1024)
+
+    return inference_time_ms, peak_gpu_memory_mb
+
+
+def collect_efficiency_metrics(opt, trainer, data_loader):
+    try:
+        first_batch = next(iter(data_loader))
+    except StopIteration:
+        raise RuntimeError("Test dataloader is empty, cannot benchmark model.")
+
+    sample_images = first_batch["image"].to(opt.device, non_blocking=True)
+
+    metrics = {
+        "Trainable Params (M)": get_trainable_params_m(trainer.model),
+        "GFLOPs": estimate_gflops(trainer.model, sample_images, opt.device),
+        "Model Size (MB)": get_model_size_mb(opt.checkpoint_path),
+    }
+
+    inference_time_ms, peak_gpu_memory_mb = benchmark_inference(
+        trainer.model,
+        sample_images,
+        opt.device,
+        warmup=opt.benchmark_warmup,
+        iters=opt.benchmark_iters,
+    )
+    metrics["Inference Time/img (ms)"] = inference_time_ms
+    metrics["Peak GPU Memory (MB)"] = peak_gpu_memory_mb
+    return metrics
+
+
+def pretty_print_efficiency_metrics(metrics):
+    print("\n================= EFFICIENCY METRICS =================")
+    print(f"Trainable Params (M): {format_metric(metrics['Trainable Params (M)'])}")
+    print(f"GFLOPs: {format_metric(metrics['GFLOPs'])}")
+    print(f"Inference Time/img (ms): {format_metric(metrics['Inference Time/img (ms)'])}")
+    print(f"Peak GPU Memory (MB): {format_metric(metrics['Peak GPU Memory (MB)'])}")
+    print(f"Model Size (MB): {format_metric(metrics['Model Size (MB)'])}")
+    print("======================================================\n")
+
+
 def append_results_to_csv(opt, results, checkpoint):
     csv_path = opt.save_csv
     if not csv_path:
@@ -400,14 +512,21 @@ def main():
     if "total_steps" in checkpoint:
         model.total_steps = checkpoint["total_steps"]
 
+    efficiency_metrics = collect_efficiency_metrics(opt, model, data_loader)
+    pretty_print_efficiency_metrics(efficiency_metrics)
+
     results = evaluate(model, data_loader, opt.device)
     pretty_print_results(results)
 
     if opt.save_json:
         if os.path.dirname(opt.save_json):
             os.makedirs(os.path.dirname(opt.save_json), exist_ok=True)
+        payload = {
+            "efficiency_metrics": efficiency_metrics,
+            "test_results": results,
+        }
         with open(opt.save_json, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            json.dump(payload, f, indent=2, ensure_ascii=False)
         print(f"Saved test results to: {opt.save_json}")
 
     if opt.save_csv:

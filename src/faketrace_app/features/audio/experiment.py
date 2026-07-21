@@ -15,7 +15,7 @@ from .augment import WaveformAugment
 from .config import AudioExperimentConfig, load_audio_experiment_config
 from .dataset import AudioClassificationDataset, collate_audio_batch
 from .metrics import classification_metrics
-from .service import AudioDeepfakeEngine, import_runtime
+from .service import AudioDeepfakeEngine, adapt_state_dict_for_model, import_runtime, load_checkpoint
 from .utils import append_csv_row, ensure_dir, now_seconds, save_json, set_seed
 
 
@@ -133,11 +133,19 @@ def build_data_loader(
     )
 
 
-def load_checkpoint_state(path: str | Path, device):
-    checkpoint = torch.load(path, map_location=device)
-    if isinstance(checkpoint, dict):
-        return checkpoint.get("model_state", checkpoint)
-    return checkpoint
+def load_checkpoint_state(path: str | Path, device, model=None):
+    checkpoint = load_checkpoint(torch, Path(path), device)
+    state_dict = checkpoint.get("model_state", checkpoint) if isinstance(checkpoint, dict) else checkpoint
+    if model is None:
+        return state_dict
+
+    adapted_state, stats = adapt_state_dict_for_model(state_dict, model)
+    if stats["remapped_matches"] > 0:
+        print(
+            "Applied legacy AST checkpoint key remapping: "
+            f"{stats['remapped_matches']} remapped, {stats['direct_matches']} direct."
+        )
+    return adapted_state
 
 
 def run_train(args: argparse.Namespace) -> dict:
@@ -173,7 +181,7 @@ def run_train(args: argparse.Namespace) -> dict:
     init_checkpoint_path = None
     if args.init_checkpoint is not None:
         init_checkpoint_path = str(Path(args.init_checkpoint).resolve())
-        checkpoint_state = load_checkpoint_state(args.init_checkpoint, device)
+        checkpoint_state = load_checkpoint_state(args.init_checkpoint, device, model=model)
         if args.init_nonstrict:
             current_state = model.state_dict()
             compatible_state = {
@@ -327,7 +335,7 @@ def run_eval(args: argparse.Namespace) -> dict:
     device = resolve_device(torch, args.device)
     loader = build_data_loader(args.manifest, cfg, augment=None, shuffle=False, device=device)
     model = build_model(cfg, device=device, init_checkpoint=args.checkpoint)
-    model.load_state_dict(load_checkpoint_state(args.checkpoint, device), strict=True)
+    model.load_state_dict(load_checkpoint_state(args.checkpoint, device, model=model), strict=True)
 
     metrics = evaluate_model(model, loader, device=device, num_classes=cfg.data.num_classes)
     summary = {

@@ -1,5 +1,7 @@
-from src.faketrace_app.audio_cli import main
+import sys
+
+from src.faketrace_app.cli import main
 
 
 if __name__ == "__main__":
-    main()
+    main(["audio", *sys.argv[1:]])
