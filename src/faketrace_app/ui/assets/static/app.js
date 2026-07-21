@@ -331,6 +331,45 @@ function collectExtraFields(item) {
   );
 }
 
+async function maybeOfferDetectorReport(items, modelName, testId) {
+  const wantsReport = window.confirm("伪造检测已完成。是否需要取证报告？");
+  if (!wantsReport) {
+    return;
+  }
+
+  const includeAiAnalysis = window.confirm("是否需要大模型为您解析检测结果？");
+  renderSummary(includeAiAnalysis ? "正在生成取证报告，并调用大模型解析检测结果..." : "正在生成取证报告...");
+
+  const originalImageUrls = await Promise.all(selectedFiles.map((file) => fileToDataUrl(file)));
+  const reportItems = items.map((item, index) => ({
+    filename: item.filename || selectedFiles[index]?.name || `image_${index + 1}.png`,
+    original_image_url: originalImageUrls[index],
+    prediction: item.prediction,
+    fake_probability: Number(item.fake_probability || 0),
+    real_probability: Number(item.real_probability || 0),
+  }));
+
+  const response = await fetch("/api/predict/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: modelSelect.value,
+      model_name: modelName,
+      test_id: testId,
+      upload_time: currentRunUploadTime,
+      include_ai_analysis: includeAiAnalysis,
+      items: reportItems,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || "报告生成失败。");
+  }
+
+  renderSummary("取证报告生成完成。");
+  renderReportActions(data);
+}
+
 function renderReportActions(report) {
   const panel = document.createElement("article");
   panel.className = "result-card report-card";
@@ -417,7 +456,13 @@ async function runCurrentFeature() {
     }
 
     if (mode === "detector") {
-      renderBinaryResults(data.results, data.meta?.model || currentModelLabel(), "图像");
+      const modelName = data.meta?.model || currentModelLabel();
+      renderBinaryResults(data.results, modelName, "图像");
+      window.setTimeout(() => {
+        maybeOfferDetectorReport(data.results, modelName, data.detector_test_id).catch((error) => {
+          setMessage(error.message);
+        });
+      }, 80);
     } else if (mode === "audio") {
       renderBinaryResults(data.results, data.meta?.model || currentModelLabel(), "音频");
     } else if (mode === "video") {

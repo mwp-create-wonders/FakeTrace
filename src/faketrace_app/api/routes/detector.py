@@ -14,6 +14,7 @@ from ..deps import (
     get_univfd_engine,
     reset_detector_engine_cache,
 )
+from ...features.detector_report.task_store import create_detector_task
 
 
 def _is_cuda_runtime_error(exc: Exception) -> bool:
@@ -95,6 +96,7 @@ async def predict(
 
     device = str(getattr(engine, "device", "unknown"))
     threshold = getattr(getattr(engine, "config", engine), "threshold", getattr(engine, "threshold", 0.5))
+    task = create_detector_task(model=model, image_count=len(results))
 
     return {
         "results": [item.to_dict() for item in results],
@@ -104,4 +106,6 @@ async def predict(
             "checkpoint": str(getattr(getattr(engine, "config", engine), "checkpoint", "")),
             "model": engine_name,
         },
+        "detector_task_id": task.id,
+        "detector_test_id": task.test_id,
     }
