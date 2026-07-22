@@ -73,7 +73,28 @@ python web_app.py
 http://127.0.0.1:7860
 ```
 
-### 3. 音频实验 CLI
+### 3. 生成报告时配置大模型
+
+报告中的“AI 分析”使用火山方舟的豆包视觉模型，调用代码在
+`src/faketrace_app/features/localization_report/service.py`（图像篡改定位报告）和
+`src/faketrace_app/features/detector_report/service.py`（图像真伪检测报告）。
+
+启动服务前，在同一个终端设置 API Key：
+
+```bash
+export DOUBAO_API_KEY='在火山方舟控制台创建的 API Key'
+python web_app.py
+```
+
+`ARK_API_KEY` 也可以作为同义配置项。代码当前请求
+`https://ark.cn-beijing.volces.com/api/v3/responses`，模型为
+`doubao-seed-2-0-pro-260215`。请确认该模型已在你的方舟账号中开通；不要把密钥写入
+仓库或提交到 Git。若不勾选报告页面的 AI 分析选项，则不会调用该接口。
+
+Linux 服务器生成中文 PDF 需要可用的中文字体。程序会优先使用系统中的 Noto Sans CJK；
+若生成后仍显示方框或乱码，请安装 `fonts-noto-cjk` 后重启服务。
+
+### 4. 音频实验 CLI
 
 音频能力现已并入统一入口，推荐使用 `app.py`。`audio_app.py` 仍保留为兼容封装。
 

@@ -25,6 +25,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfgen.canvas import Canvas
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
@@ -105,6 +106,7 @@ def _register_fonts() -> tuple[str, str, str, str]:
                 break
         return "FakeTraceSongti", "FakeTraceSongtiBold", "FakeTraceTimes", header_cn_font
 
+<<<<<<< Updated upstream
     # Windows keeps the same Songti/Hei/Times pairing using the system CJK fonts.
     windows_songti_path = Path("C:/Windows/Fonts/simsun.ttc")
     if windows_songti_path.exists():
@@ -133,11 +135,31 @@ def _register_fonts() -> tuple[str, str, str, str]:
 
     # Fallback keeps PDF generation available on Linux servers. It will not be
     # as close to the sample macOS/WPS typography as the Songti/Times setup.
+=======
+    # Prefer a CJK font on Linux. DejaVu Serif does not contain Chinese glyphs,
+    # so using it for the Chinese report text produces blank boxes / garbled PDF.
+    # Noto CJK is provided by most Debian/Ubuntu desktop and server images.
+    noto_regular_path = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
+    noto_bold_path = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
+>>>>>>> Stashed changes
     try:
-        pdfmetrics.registerFont(TTFont("FakeTraceDejaVu", "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"))
-        return "FakeTraceDejaVu", "FakeTraceDejaVu", "FakeTraceDejaVu", "FakeTraceDejaVu"
-    except Exception as exc:  # pragma: no cover - environment specific
-        raise RuntimeError("No usable PDF font found. Install Songti/Times or DejaVu fonts.") from exc
+        if noto_regular_path.exists() and noto_bold_path.exists():
+            # The third face (index 2) is Simplified Chinese in the Noto CJK TTC.
+            pdfmetrics.registerFont(TTFont("FakeTraceNotoCJK", str(noto_regular_path), subfontIndex=2))
+            pdfmetrics.registerFont(TTFont("FakeTraceNotoCJKBold", str(noto_bold_path), subfontIndex=2))
+            return "FakeTraceNotoCJK", "FakeTraceNotoCJKBold", "FakeTraceNotoCJK", "FakeTraceNotoCJK"
+    except Exception:
+        # Some ReportLab builds cannot read TrueType collections (.ttc). Use the
+        # built-in CID fallback below instead of failing the whole report.
+        pass
+
+    # ReportLab ships this CID font definition. It allows Chinese output even in
+    # minimal containers that have no OS font packages installed.
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        return "STSong-Light", "STSong-Light", "STSong-Light", "STSong-Light"
+    except Exception as exc:  # pragma: no cover - ReportLab installation specific
+        raise RuntimeError("No usable PDF font found. Reinstall reportlab or install Noto CJK fonts.") from exc
 
 
 FONT_CN, FONT_CN_BOLD, FONT_EN, FONT_HEADER_CN = _register_fonts()
