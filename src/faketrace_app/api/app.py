@@ -18,4 +18,5 @@ from .routes import (  # noqa: F401,E402
     security,
     system,
     video,
+    video_report,
 )

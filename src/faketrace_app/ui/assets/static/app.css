@@ -550,6 +550,60 @@ button:disabled {
   border: 1px solid var(--line);
 }
 
+.video-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(5, 17, 37, 0.64);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.video-analysis {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.chart-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trend-chart {
+  width: 100%;
+  max-width: 560px;
+  border-radius: 14px;
+  background: rgba(10, 25, 50, 0.6);
+}
+
+.suspicious-frame {
+  display: grid;
+  gap: 8px;
+}
+
+.suspicious-frame img {
+  width: 100%;
+  max-width: 224px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.suspicious-frame span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 @media (max-width: 820px) {
   .hero {
     grid-template-columns: 1fr;

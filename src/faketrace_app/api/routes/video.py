@@ -1,10 +1,20 @@
 import io
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import File, HTTPException, Query, UploadFile
 
 from ..app import app
 from ..deps import get_tri_engine
+from ...features.video_report.task_store import create_video_task
+
+
+def _to_jsonable(value: Any) -> Any:
+    """numpy 数组/标量 → Python 原生类型，便于 FastAPI 序列化。"""
+    if value is None:
+        return None
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    return value
 
 
 @app.post("/api/video/predict")
@@ -47,11 +57,26 @@ async def predict_video(
                 "fake_probability": fake_probability,
                 "prediction": prediction,
                 "label": getattr(item, "label", prediction),
+                "duration": float(getattr(item, "duration", 0.0)),
+                "width": int(getattr(item, "width", 0)),
+                "height": int(getattr(item, "height", 0)),
+                "fps": float(getattr(item, "fps", 0.0)),
+                "total_frames": int(getattr(item, "total_frames", 0)),
+                "threshold": float(getattr(item, "threshold", 0.5)),
+                "frame_info": _to_jsonable(getattr(item, "frame_info", None)),
+                "velocity_l2": _to_jsonable(getattr(item, "velocity_l2", None)),
+                "acceleration_l2": _to_jsonable(getattr(item, "acceleration_l2", None)),
+                "lota_scores": _to_jsonable(getattr(item, "lota_scores", None)),
+                "suspicious_frame_b64": getattr(item, "suspicious_frame_b64", None),
+                "suspicious_frame_time": getattr(item, "suspicious_frame_time", None),
             }
         )
 
+    task = create_video_task(model="tri", video_count=len(results))
+
     return {
         "results": results,
+        "video_test_id": task.test_id,
         "meta": {
             "device": str(getattr(engine, "device", "unknown")),
             "model": "TRI",

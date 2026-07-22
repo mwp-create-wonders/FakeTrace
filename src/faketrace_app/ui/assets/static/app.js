@@ -470,6 +470,57 @@ async function maybeOfferLocalizationReport(items, modelName, testId) {
   renderReportActions(data);
 }
 
+async function maybeOfferVideoReport(items, modelName, testId) {
+  const wantsReport = window.confirm("视频伪造检测已完成。是否需要取证报告？");
+  if (!wantsReport) {
+    return;
+  }
+
+  const includeAiAnalysis = window.confirm("是否需要大模型为您解析检测结果？");
+  renderSummary(includeAiAnalysis ? "正在生成取证报告，并调用大模型解析检测结果..." : "正在生成取证报告...");
+
+  const videoUrls = await Promise.all(selectedFiles.map((file) => fileToDataUrl(file)));
+  const reportItems = items.map((item, index) => ({
+    filename: item.filename || selectedFiles[index]?.name || `video_${index + 1}.mp4`,
+    video_url: videoUrls[index],
+    duration: Number(item.duration || 0),
+    width: Number(item.width || 0),
+    height: Number(item.height || 0),
+    fps: Number(item.fps || 0),
+    total_frames: Number(item.total_frames || 0),
+    prediction: item.prediction,
+    fake_probability: Number(item.fake_probability || 0),
+    real_probability: Number(item.real_probability || 0),
+    threshold: Number(item.threshold || 0.5),
+    frame_info: item.frame_info || null,
+    velocity_l2: item.velocity_l2 || null,
+    acceleration_l2: item.acceleration_l2 || null,
+    lota_scores: item.lota_scores || null,
+    suspicious_frame_b64: item.suspicious_frame_b64 || null,
+    suspicious_frame_time: item.suspicious_frame_time != null ? Number(item.suspicious_frame_time) : null,
+  }));
+
+  const response = await fetch("/api/video/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: modelSelect.value,
+      model_name: modelName,
+      test_id: testId,
+      upload_time: currentRunUploadTime,
+      include_ai_analysis: includeAiAnalysis,
+      items: reportItems,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || "报告生成失败。");
+  }
+
+  renderSummary("取证报告生成完成。");
+  renderReportActions(data);
+}
+
 async function runCurrentFeature() {
   if (!selectedFiles.length) {
     return;
@@ -511,7 +562,13 @@ async function runCurrentFeature() {
         });
       }, 80);
     } else if (mode === "video") {
-      renderBinaryResults(data.results, data.meta?.model || currentModelLabel(), "视频");
+      const modelName = data.meta?.model || currentModelLabel();
+      renderVideoResults(data.results, modelName);
+      window.setTimeout(() => {
+        maybeOfferVideoReport(data.results, modelName, data.video_test_id).catch((error) => {
+          setMessage(error.message);
+        });
+      }, 80);
     } else {
       const modelName = data.meta?.model || currentModelLabel();
       renderLocalizerResults(data.results, modelName);
@@ -626,6 +683,194 @@ function renderLocalizerResults(items, modelName = "TruFor") {
         </div>
       </div>
     `;
+    results.appendChild(card);
+  });
+}
+
+function _renderTrendChart(velocity, acceleration, lota, frameInfo) {
+  if (!velocity || !acceleration || !lota || velocity.length < 2) {
+    return "";
+  }
+
+  const width = 460;
+  const height = 240;
+  const padding = 45;
+  const rightPad = 45;
+  const chartWidth = width - padding - rightPad;
+  const chartHeight = height - padding * 2;
+
+  // X 轴：优先用 frameInfo 的秒数
+  let xLabels = [];
+  let useTime = false;
+  if (frameInfo && frameInfo.length === velocity.length) {
+    xLabels = frameInfo.map((fi) => Number(fi.target_time || 0).toFixed(2));
+    useTime = true;
+  } else {
+    xLabels = velocity.map((_, i) => String(i + 1));
+  }
+
+  const vMax = Math.max(...velocity) * 1.1;
+  const aMax = Math.max(...acceleration) * 1.1;
+  const maxVal = Math.max(vMax, aMax, 1.0);
+
+  const points = velocity.map((_, i) => ({
+    x: padding + (i / (velocity.length - 1)) * chartWidth,
+    v: padding + chartHeight - (velocity[i] / maxVal) * chartHeight,
+    a: padding + chartHeight - (acceleration[i] / maxVal) * chartHeight,
+    l: padding + chartHeight - (lota[i] / 1.0) * chartHeight,
+  }));
+
+  const vPath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.v}`).join(" ");
+  const aPath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.a}`).join(" ");
+  const lPath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.l}`).join(" ");
+
+  const markers = points.map((p, i) => `
+    <circle cx="${p.x}" cy="${p.v}" r="5" fill="#E74C3C" />
+    <circle cx="${p.x}" cy="${p.a}" r="5" fill="#3498DB" />
+    <circle cx="${p.x}" cy="${p.l}" r="5" fill="#2ECC71" />
+  `).join("");
+
+  // X 轴刻度标签
+  const xTicks = points.map((p, i) =>
+    `<text x="${p.x}" y="${padding + chartHeight + 18}" text-anchor="middle" font-size="11" fill="#ccc">${xLabels[i]}</text>`
+  ).join("");
+
+  // 左 Y 轴刻度（0, maxVal/2, maxVal）
+  const yTicks = [0, 0.5, 1.0].map((ratio) => {
+    const val = (maxVal * ratio).toFixed(1);
+    const y = padding + chartHeight - ratio * chartHeight;
+    return `<text x="${padding - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="#ccc">${val}</text>`;
+  }).join("");
+
+  // 右 Y 轴刻度（LOTA 0, 0.5, 1.0）
+  const rightYTicks = [0, 0.5, 1.0].map((ratio) => {
+    const y = padding + chartHeight - ratio * chartHeight;
+    return `<text x="${padding + chartWidth + 8}" y="${y + 4}" text-anchor="start" font-size="11" fill="#2ECC71">${ratio.toFixed(1)}</text>`;
+  }).join("");
+
+  const xLabelText = useTime ? "时间 (秒)" : "帧序号";
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" class="trend-chart">
+      <defs>
+        <linearGradient id="vGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#E74C3C" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#E74C3C" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="aGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#3498DB" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#3498DB" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="lGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#2ECC71" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#2ECC71" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${padding + chartHeight}" stroke="#bbb" stroke-width="1.5"/>
+      <line x1="${padding}" y1="${padding + chartHeight}" x2="${padding + chartWidth}" y2="${padding + chartHeight}" stroke="#bbb" stroke-width="1.5"/>
+      <line x1="${padding + chartWidth}" y1="${padding}" x2="${padding + chartWidth}" y2="${padding + chartHeight}" stroke="#bbb" stroke-width="1.5"/>
+      ${yTicks}
+      ${rightYTicks}
+      ${xTicks}
+      <path d="${vPath} L ${points[points.length - 1].x} ${padding + chartHeight} L ${points[0].x} ${padding + chartHeight} Z" fill="url(#vGrad)" />
+      <path d="${vPath}" stroke="#E74C3C" stroke-width="2.5" fill="none" />
+      <path d="${aPath} L ${points[points.length - 1].x} ${padding + chartHeight} L ${points[0].x} ${padding + chartHeight} Z" fill="url(#aGrad)" />
+      <path d="${aPath}" stroke="#3498DB" stroke-width="2.5" fill="none" />
+      <path d="${lPath} L ${points[points.length - 1].x} ${padding + chartHeight} L ${points[0].x} ${padding + chartHeight} Z" fill="url(#lGrad)" />
+      <path d="${lPath}" stroke="#2ECC71" stroke-width="2.5" fill="none" />
+      ${markers}
+      <text x="${width / 2}" y="${height - 5}" text-anchor="middle" font-size="14" fill="#ccc">${xLabelText}</text>
+      <text x="${padding - 30}" y="${padding + chartHeight / 2}" text-anchor="middle" font-size="14" fill="#ccc" transform="rotate(-90, ${padding - 30}, ${padding + chartHeight / 2})">速度 / 加速度</text>
+      <text x="${padding + chartWidth + 28}" y="${padding + chartHeight / 2}" text-anchor="middle" font-size="14" fill="#2ECC71" transform="rotate(90, ${padding + chartWidth + 28}, ${padding + chartHeight / 2})">LOTA 分数</text>
+      <rect x="${width - 120}" y="${padding - 8}" width="12" height="12" fill="#E74C3C"/>
+      <text x="${width - 104}" y="${padding + 2}" font-size="12" fill="#E74C3C">速度 L2</text>
+      <rect x="${width - 120}" y="${padding + 12}" width="12" height="12" fill="#3498DB"/>
+      <text x="${width - 104}" y="${padding + 22}" font-size="12" fill="#3498DB">加速度 L2</text>
+      <rect x="${width - 120}" y="${padding + 32}" width="12" height="12" fill="#2ECC71"/>
+      <text x="${width - 104}" y="${padding + 42}" font-size="12" fill="#2ECC71">LOTA 分数</text>
+    </svg>
+  `;
+}
+
+function renderVideoResults(items, modelName = "TRI") {
+  const realCount = items.filter((item) => item.prediction === "real").length;
+  const fakeCount = items.filter((item) => item.prediction === "fake").length;
+  const errorCount = items.filter((item) => item.prediction === "error").length;
+
+  let summaryText = `${modelName} 视频检测完成，共 ${items.length} 个结果，真实 ${realCount}，疑似伪造 ${fakeCount}`;
+  if (errorCount > 0) {
+    summaryText += `，处理失败 ${errorCount}`;
+  }
+  renderSummary(summaryText);
+
+  results.innerHTML = "";
+  items.forEach((item, index) => {
+    const realPercent = Number(item.real_probability || 0) * 100;
+    const fakePercent = Number(item.fake_probability || 0) * 100;
+    const confidence = item.prediction === "real" ? realPercent : fakePercent;
+    const card = document.createElement("article");
+    card.className = `result-card ${item.prediction === "error" ? "pending-card" : item.prediction}`;
+
+    const previewNode = createPreviewNode(selectedFiles[index] || { name: item.filename }, previewUrls[index], index);
+
+    const badgeText = item.prediction === "real"
+      ? "Real"
+      : item.prediction === "fake"
+        ? "Fake"
+        : "Error";
+    const verdictText = item.prediction === "real"
+      ? "更接近真实视频分布。"
+      : item.prediction === "fake"
+        ? "更接近伪造视频分布。"
+        : "模型未能完成该文件的有效处理。";
+
+    const durationText = item.duration > 0 ? `${item.duration.toFixed(1)}秒` : "未知";
+    const resolutionText = item.width && item.height ? `${item.width}×${item.height}` : "未知";
+    const fpsText = item.fps > 0 ? `${item.fps.toFixed(1)}fps` : "未知";
+
+    const trendChart = _renderTrendChart(
+      item.velocity_l2,
+      item.acceleration_l2,
+      item.lota_scores,
+      item.frame_info
+    );
+
+    const suspiciousFrame = item.suspicious_frame_b64
+      ? (() => {
+          const t = item.suspicious_frame_time;
+          const seconds = t != null ? `(${Number(t).toFixed(2)}s)` : "";
+          return `<div class="suspicious-frame"><img src="data:image/jpeg;base64,${item.suspicious_frame_b64}" alt="可疑帧"><span>可疑帧${seconds}</span></div>`;
+        })()
+      : "";
+
+    card.innerHTML = `
+      <div class="result-body">
+        <div class="result-head">
+          <p class="filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</p>
+          <span class="badge ${item.prediction === "error" ? "pending" : item.prediction}">${badgeText}</span>
+        </div>
+        <p class="verdict">${verdictText}</p>
+        <div class="video-meta">
+          <span>时长: ${durationText}</span>
+          <span>分辨率: ${resolutionText}</span>
+          <span>帧率: ${fpsText}</span>
+        </div>
+        <div class="prob">
+          <div class="prob-row"><span>真实概率</span><strong>${realPercent.toFixed(1)}%</strong></div>
+          <div class="bar"><span style="width: ${realPercent}%"></span></div>
+          <div class="prob-row"><span>伪造概率</span><strong>${fakePercent.toFixed(1)}%</strong></div>
+          <div class="confidence">判断阈值：${(Number(item.threshold || 0.5) * 100).toFixed(2)}%</div>
+        </div>
+        <div class="video-analysis">
+          <div class="chart-section">${trendChart}</div>
+          ${suspiciousFrame}
+        </div>
+      </div>
+    `;
+
+    if (previewNode) {
+      card.prepend(previewNode);
+    }
     results.appendChild(card);
   });
 }

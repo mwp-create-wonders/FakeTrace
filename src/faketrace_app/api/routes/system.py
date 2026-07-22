@@ -118,7 +118,8 @@ def status():
 
     video_status = _status_from_files(
         "TRI",
-        TRI_MODEL_DIR / "models" / "weights" / "D3.pth",
+        TRI_MODEL_DIR / "LOTA" / "lota_weights" / "Network_best.pth",
+        TRI_MODEL_DIR / "weights" / "l2_residual_independent.pth",
         TRI_MODEL_DIR / "models" / "weights" / "xclip-base-patch16" / "config.json",
         extra={"threshold": 0.5},
     )
