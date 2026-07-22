@@ -31,7 +31,6 @@ from reportlab.platypus import (
     Flowable,
     Image as RLImage,
     KeepTogether,
-    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -549,6 +548,42 @@ def _parse_upload_time(value: str | None) -> datetime:
         return datetime.now().astimezone()
 
 
+def _append_analysis_section(story: list[Any], section_title: str, item_analyses: list[tuple[str, list[str]]]) -> None:
+    if not item_analyses:
+        return
+
+    first_title, first_paragraphs = item_analyses[0]
+    first_paragraphs = first_paragraphs or [""]
+    story.append(
+        KeepTogether(
+            [
+                _section_header(section_title),
+                Spacer(1, 7 * mm),
+                _p(first_title, BODY_STYLE),
+                Spacer(1, 3 * mm),
+                _p(first_paragraphs[0], BODY_INDENT_STYLE),
+                Spacer(1, 1.5 * mm),
+            ]
+        )
+    )
+    for paragraph in first_paragraphs[1:]:
+        story.append(_p(paragraph, BODY_INDENT_STYLE))
+        story.append(Spacer(1, 1.5 * mm))
+    story.append(Spacer(1, 6 * mm))
+
+    for item_title, paragraphs in item_analyses[1:]:
+        story.append(_p(item_title, BODY_STYLE))
+        story.append(Spacer(1, 3 * mm))
+        for paragraph in paragraphs or [""]:
+            story.append(_p(paragraph, BODY_INDENT_STYLE))
+            story.append(Spacer(1, 1.5 * mm))
+        story.append(Spacer(1, 6 * mm))
+
+
+def _keep_table_together(table: Table) -> KeepTogether:
+    return KeepTogether([table])
+
+
 def _build_story(
     items: list[ReportImage],
     model_name: str,
@@ -576,7 +611,7 @@ def _build_story(
             _bullet_line(f"用以分析的大模型API版本：  {DOUBAO_MODEL if include_ai_analysis else '未启用'}"),
             _bullet_line("图片信息："),
             Spacer(1, 3 * mm),
-            _image_info_table(items),
+            _keep_table_together(_image_info_table(items)),
             Spacer(1, 12 * mm),
             _section_header("2.  取证结果"),
             Spacer(1, 6 * mm),
@@ -598,16 +633,17 @@ def _build_story(
         )
 
     if include_ai_analysis:
-        story.append(PageBreak())
-        story.append(_section_header("3.  取证结果分析"))
-        story.append(Spacer(1, 7 * mm))
-        for item in items:
-            story.append(_p(f"（{item.index}） 序号{item.index}: 图片 {item.filename} 取证结果分析", BODY_STYLE))
-            story.append(Spacer(1, 3 * mm))
-            for paragraph in _split_analysis(item.analysis):
-                story.append(_p(paragraph, BODY_INDENT_STYLE))
-                story.append(Spacer(1, 1.5 * mm))
-            story.append(Spacer(1, 6 * mm))
+        _append_analysis_section(
+            story,
+            "3.  取证结果分析",
+            [
+                (
+                    f"（{item.index}） 序号{item.index}: 图片 {item.filename} 取证结果分析",
+                    _split_analysis(item.analysis),
+                )
+                for item in items
+            ],
+        )
 
     story.append(_section_header("4.  总结"))
     story.append(Spacer(1, 10 * mm))
@@ -619,7 +655,7 @@ def _build_story(
         )
     )
     story.append(Spacer(1, 8 * mm))
-    story.append(_summary_table(items))
+    story.append(_keep_table_together(_summary_table(items)))
     return story
 
 

@@ -21,7 +21,6 @@ from reportlab.lib.units import mm
 from reportlab.platypus import (
     Image as RLImage,
     KeepTogether,
-    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -39,11 +38,13 @@ from ..localization_report.service import (
     REQUEST_TIMEOUT_SECONDS,
     SMALL_CENTER_STYLE,
     TITLE_STYLE,
+    _append_analysis_section,
     _bullet_line,
     _decode_data_url,
     _draw_first_page,
     _draw_later_page,
     _format_percent,
+    _keep_table_together,
     _p,
     _parse_upload_time,
     _read_api_key,
@@ -498,7 +499,7 @@ def _build_story(
             _bullet_line(f"用以分析的大模型API版本：  {DOUBAO_MODEL if include_ai_analysis else '未启用'}"),
             _bullet_line("音频信息："),
             Spacer(1, 3 * mm),
-            _audio_info_table(items),
+            _keep_table_together(_audio_info_table(items)),
             Spacer(1, 12 * mm),
             _section_header("2.  取证结果"),
             Spacer(1, 6 * mm),
@@ -519,16 +520,17 @@ def _build_story(
             )
         )
 
-    story.append(PageBreak())
-    story.append(_section_header("3.  取证结果解析"))
-    story.append(Spacer(1, 7 * mm))
-    for item in items:
-        story.append(_p(f"（{item.index}） 序号{item.index}: 音频 {item.filename} 取证结果解析", BODY_STYLE))
-        story.append(Spacer(1, 3 * mm))
-        for paragraph in _split_analysis(item.analysis):
-            story.append(_p(paragraph, BODY_INDENT_STYLE))
-            story.append(Spacer(1, 1.5 * mm))
-        story.append(Spacer(1, 6 * mm))
+    _append_analysis_section(
+        story,
+        "3.  取证结果解析",
+        [
+            (
+                f"（{item.index}） 序号{item.index}: 音频 {item.filename} 取证结果解析",
+                _split_analysis(item.analysis),
+            )
+            for item in items
+        ],
+    )
 
     story.append(_section_header("4.  总结"))
     story.append(Spacer(1, 10 * mm))
@@ -540,7 +542,7 @@ def _build_story(
         )
     )
     story.append(Spacer(1, 8 * mm))
-    story.append(_summary_table(items))
+    story.append(_keep_table_together(_summary_table(items)))
     return story
 
 
